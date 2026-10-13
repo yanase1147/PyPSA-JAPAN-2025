@@ -50,6 +50,19 @@ python run_dispatch.py data/Network_config_2025.xlsx \
 地点は `areas` シートのエリア代表点（各1地点）。太陽光は固定架台・傾斜30°・真南・損失10%、
 風力は Vestas V90 2000・ハブ高さ80m（MERRA-2）。UTC→JST変換済み。
 
+### 原子力の出力（HJKS 実績）
+
+原子力は `nuclear_cf` シートのCFどおりに出力を固定します（長期固定電源として抑制しない）。
+このシートは、HJKS のユニット別・1時間ごとの出力CSV（kW）から次のコマンドで作成・更新します。
+
+```bash
+python tools/nuclear_cf_from_hjks.py data/Network_config_2025.xlsx nuclear_2025_hourly_by_unit.csv
+```
+
+ユニット出力を発電所単位に合計し、`generators` シートの `p_nom` で割ってCFにします。
+2025年実績では合計 94.5 TWh です。`nuclear_cf` シートが無い場合は、従来どおり `generators` シートの
+`p_max_pu` を上限として経済負荷配分します。
+
 ## ファイル構成
 
 ```
@@ -59,12 +72,14 @@ show_results.py         結果の表示スクリプト（CLI）
 pypsa_japan/summary.py  結果の集計
 pypsa_japan/plots.py    結果の図示
 tools/fetch_ninja_cf.py Renewables.ninja から太陽光・風力CFを取得
+tools/nuclear_cf_from_hjks.py HJKS の原子力ユニット別出力から nuclear_cf シートを作成
 data/                   入力データ（Network_config_2025.xlsx, シート構成は data/README.md）
 ```
 
 ## 既知の制約・仮定
 
 - 起動停止・最低出力（unit commitment）は考慮しない線形モデル
+- 原子力は2025年の実績出力に固定（`nuclear_cf` シート）
 - エリア内の送電制約は考慮しない
 - 揚水の初期貯水率50%（各窓の終端は自由）
 - バイオマスのうち `biomass_cf` にプロファイルの無いユニットは、7基の容量加重平均プロファイルで固定

@@ -2,7 +2,7 @@
 
 シートとPyPSAコンポーネントの対応:
     areas              -> Bus (エリア = 1ノード)
-    generators         -> Generator (時系列CFは *_cf シートの同名列)
+    generators         -> Generator (時系列CFは *_cf シートの同名列。nuclear_cf は出力固定)
     loads + demand_mw  -> Load
     interconnections   -> Link (双方向: p_nom / p_nom_reverse)
     stores             -> Store (揚水上池。carrier名の専用バスに接続)
@@ -11,7 +11,7 @@
 import pandas as pd
 import pypsa
 
-CF_SHEETS = ["solar_cf", "wind_cf", "hydro_cf", "biomass_cf"]
+CF_SHEETS = ["solar_cf", "wind_cf", "hydro_cf", "biomass_cf", "nuclear_cf"]  # nuclear_cf は任意
 VOLL = 1e6  # 供給力不足 (load shedding) のペナルティ単価
 
 
@@ -60,7 +60,7 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5):
           p_max_pu=g.p_max_pu, p_min_pu=g.p_min_pu,
           ramp_limit_up=g.ramp_limit_up.where(g.ramp_limit_up > 0),
           ramp_limit_down=g.ramp_limit_down.where(g.ramp_limit_down > 0))
-    cf = pd.concat([x[k].iloc[:hours] for k in CF_SHEETS], axis=1).set_index(snaps)
+    cf = pd.concat([x[k].iloc[:hours] for k in CF_SHEETS if k in x], axis=1).set_index(snaps)
     n.generators_t.p_max_pu = cf[cf.columns.intersection(g.index)]
 
     # バイオマス: FIT優先給電として出力を固定 (p_min_pu = p_max_pu = プロファイル)
@@ -71,6 +71,11 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5):
     bio_prof = pd.DataFrame({b: bio_cf[b] if b in bio_cf else avg_cf for b in bio})
     n.generators_t.p_max_pu[bio] = bio_prof
     n.generators_t.p_min_pu = bio_prof
+
+    # 原子力: nuclear_cf シート (HJKS の実績出力) があれば、その出力に固定する
+    if "nuclear_cf" in x:
+        nu = x["nuclear_cf"].columns.intersection(g.index[g.carrier == "Nuclear"])
+        n.generators_t.p_min_pu[nu] = n.generators_t.p_max_pu[nu]
 
     # 供給力不足の検知用
     n.add("Generator", a.index + " load shedding", bus=a.index.values,
