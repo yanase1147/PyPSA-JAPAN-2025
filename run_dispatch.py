@@ -1,22 +1,26 @@
 """日本9エリア 需給シミュレーション (経済負荷配分, 1時間刻み)
 
 例:
-    python run_dispatch.py data/project_2025_draft_2.xlsx --hours 168    # 1週間テスト(一括)
-    python run_dispatch.py data/project_2025_draft_2.xlsx --rolling      # 1年分をローリングホライズンで
-    python run_dispatch.py data/project_2025_draft_2.xlsx \\
+    python run_dispatch.py data/Network_config_2025.xlsx --hours 168    # 1週間テスト(一括)
+    python run_dispatch.py data/Network_config_2025.xlsx --rolling      # 1年分をローリングホライズンで
+    python run_dispatch.py data/Network_config_2025.xlsx \\
         --solar-cf data/solar_cf_ninja_2023.csv --wind-cf data/wind_cf_ninja_2023.csv
 """
 import argparse
+import time
 from pathlib import Path
 
-import pandas as pd
+from pypsa_japan import build_network, print_summary, read_project, summarize
 
-from pypsa_japan import build_network, read_project, summarize
+
+def fmt_time(sec):
+    m, s = divmod(sec, 60)
+    return f"{int(m)}分{s:.1f}秒" if m else f"{s:.1f}秒"
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("xlsx", help="project_2025 形式の入力Excel")
+    ap.add_argument("xlsx", help="Network_config_2025 形式の入力Excel")
     ap.add_argument("--hours", type=int, default=8760)
     ap.add_argument("--solar-cf", help="solar_cf シートを置き換えるCSV")
     ap.add_argument("--wind-cf", help="wind_cf シートを置き換えるCSV")
@@ -28,25 +32,26 @@ def main():
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
 
+    t0 = time.perf_counter()
     x = read_project(args.xlsx, solar_cf=args.solar_cf, wind_cf=args.wind_cf)
     n = build_network(x, hours=args.hours)
 
+    t1 = time.perf_counter()
     opts = dict(solver_name="highs", solver_options={"threads": args.threads})
     if args.rolling and args.hours > args.horizon:
         n.optimize.optimize_with_rolling_horizon(horizon=args.horizon, overlap=args.overlap, **opts)
     else:
         n.optimize(**opts)
+    t2 = time.perf_counter()
 
-    s = summarize(n)
-    pd.set_option("display.float_format", "{:,.3f}".format)
-    print("\n=== 電源別 ===\n", s["generation"])
-    print(f"\n需要: {s['demand_TWh']:,.1f} TWh   燃料費: {s['fuel_cost'] / 1e12:,.3f} 兆円"
-          f"   供給力不足: {s['load_shedding_MWh']:,.0f} MWh")
-    print("\n=== エリア別 平均限界価格 [円/MWh] ===\n", s["marginal_price_mean"].round(0))
-    print("\n=== 連系線 混雑時間率 ===\n", s["congestion_share"])
+    print_summary(summarize(n))
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     n.export_to_netcdf(args.out)
+
+    t3 = time.perf_counter()
+    print(f"\n計算時間: 合計 {fmt_time(t3 - t0)}"
+          f" (入力読込・モデル構築 {fmt_time(t1 - t0)} / 最適化 {fmt_time(t2 - t1)} / 集計・保存 {fmt_time(t3 - t2)})")
 
 
 if __name__ == "__main__":

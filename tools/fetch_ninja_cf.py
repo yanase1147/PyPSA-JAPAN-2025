@@ -1,8 +1,8 @@
 """Renewables.ninja から9エリアの太陽光・風力 設備利用率(CF)を取得し、
-project_2025 の solar_cf / wind_cf シートと同じ形式 (8760行 x 9列, JST) のCSVを出力する。
+Network_config_2025 の solar_cf / wind_cf シートと同じ形式 (8760行 x 9列, JST) のCSVを出力する。
 
 使い方:
-    NINJA_TOKEN=xxxx python tools/fetch_ninja_cf.py data/project_2025_draft_2.xlsx [weather_year] [outdir]
+    NINJA_TOKEN=xxxx python tools/fetch_ninja_cf.py data/Network_config_2025.xlsx [weather_year] [outdir]
 
 - 地点: areas シートの lat/lon (エリア代表1地点)
 - 太陽光: 固定架台, 傾斜30°, 真南, システム損失10%

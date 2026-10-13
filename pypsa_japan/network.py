@@ -1,4 +1,4 @@
-"""project_2025 形式の Excel から PyPSA ネットワークを構築する。
+"""Network_config_2025 形式の Excel から PyPSA ネットワークを構築する。
 
 シートとPyPSAコンポーネントの対応:
     areas              -> Bus (エリア = 1ノード)

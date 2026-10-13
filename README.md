@@ -19,19 +19,31 @@
 ```bash
 pip install -r requirements.txt
 
-python run_dispatch.py data/project_2025_draft_2.xlsx --hours 168   # 1週間で動作確認
-python run_dispatch.py data/project_2025_draft_2.xlsx               # 1年分（4コアで約4分）
+python run_dispatch.py data/Network_config_2025.xlsx --hours 168   # 1週間で動作確認
+python run_dispatch.py data/Network_config_2025.xlsx               # 1年分（4コアで約4分）
 ```
 
 結果は `results/dispatch.nc`（PyPSA netCDF）に保存され、電源別発電量・設備利用率・抑制量、
 エリア別平均限界価格、連系線の混雑時間率を表示します。
 
+### 結果を表示する
+
+```bash
+python show_results.py                                        # 全期間・全国（31日超は日平均）
+python show_results.py --area Tokyo --start 2025-08-01 --end 2025-08-07   # エリア・期間を指定（1時間値）
+python show_results.py --no-show                              # ウィンドウを開かず PNG 保存のみ
+```
+
+保存済みの `results/dispatch.nc` を読み、集計表に加えて ①需給バランス（電源別積み上げ・揚水・連系線受送電）
+②エリア別の電源構成と需要 ③エリア別限界価格のヒートマップ ④連系線の方向別混雑時間率 を表示し、
+`results/figures/` に PNG で保存します。
+
 ### Renewables.ninja のCFを使う
 
 ```bash
 export NINJA_TOKEN=<Renewables.ninja の API トークン>
-python tools/fetch_ninja_cf.py data/project_2025_draft_2.xlsx 2023   # 気象年
-python run_dispatch.py data/project_2025_draft_2.xlsx \
+python tools/fetch_ninja_cf.py data/Network_config_2025.xlsx 2023   # 気象年
+python run_dispatch.py data/Network_config_2025.xlsx \
     --solar-cf data/solar_cf_ninja_2023.csv --wind-cf data/wind_cf_ninja_2023.csv
 ```
 
@@ -43,9 +55,11 @@ python run_dispatch.py data/project_2025_draft_2.xlsx \
 ```
 run_dispatch.py         実行スクリプト（CLI）
 pypsa_japan/network.py  Excel → PyPSA ネットワーク構築
+show_results.py         結果の表示スクリプト（CLI）
 pypsa_japan/summary.py  結果の集計
+pypsa_japan/plots.py    結果の図示
 tools/fetch_ninja_cf.py Renewables.ninja から太陽光・風力CFを取得
-data/                   入力データ（project_2025_draft_2.xlsx, シート構成は data/README.md）
+data/                   入力データ（Network_config_2025.xlsx, シート構成は data/README.md）
 ```
 
 ## 既知の制約・仮定

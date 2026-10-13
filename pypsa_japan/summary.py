@@ -25,3 +25,12 @@ def summarize(n):
         "marginal_price_mean": n.buses_t.marginal_price[areas].mean(),
         "congestion_share": (flow.abs() >= ic.p_nom - 1e-3).mean(),
     }
+
+
+def print_summary(s):
+    with pd.option_context("display.float_format", "{:,.3f}".format):
+        print("\n=== 電源別 ===\n", s["generation"])
+        print(f"\n需要: {s['demand_TWh']:,.1f} TWh   燃料費: {s['fuel_cost'] / 1e12:,.3f} 兆円"
+              f"   供給力不足: {s['load_shedding_MWh']:,.0f} MWh")
+        print("\n=== エリア別 平均限界価格 [円/MWh] ===\n", s["marginal_price_mean"].round(0))
+        print("\n=== 連系線 混雑時間率 ===\n", s["congestion_share"])
