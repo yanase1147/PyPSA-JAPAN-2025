@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+~$*
+results/
+*.nc
+*.log
+# 入力データはリポジトリに含めない (data/README.md 参照)
+data/*.xlsx
+data/*.csv

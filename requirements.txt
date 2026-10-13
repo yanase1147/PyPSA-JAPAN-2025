@@ -1,0 +1,6 @@
+pypsa>=1.0
+highspy>=1.7
+pandas>=2.0
+openpyxl>=3.1
+netCDF4>=1.6
+requests>=2.31
