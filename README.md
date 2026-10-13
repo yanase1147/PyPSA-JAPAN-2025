@@ -19,7 +19,6 @@
 ```bash
 pip install -r requirements.txt
 
-# 入力Excelを data/ に置いてから
 python run_dispatch.py data/project_2025_draft_2.xlsx --hours 168   # 1週間で動作確認
 python run_dispatch.py data/project_2025_draft_2.xlsx               # 1年分（4コアで約4分）
 ```
@@ -46,7 +45,7 @@ run_dispatch.py         実行スクリプト（CLI）
 pypsa_japan/network.py  Excel → PyPSA ネットワーク構築
 pypsa_japan/summary.py  結果の集計
 tools/fetch_ninja_cf.py Renewables.ninja から太陽光・風力CFを取得
-data/                   入力データ置き場（コミット対象外, data/README.md 参照）
+data/                   入力データ（project_2025_draft_2.xlsx, シート構成は data/README.md）
 ```
 
 ## 既知の制約・仮定

@@ -5,6 +5,5 @@ __pycache__/
 results/
 *.nc
 *.log
-# 入力データはリポジトリに含めない (data/README.md 参照)
-data/*.xlsx
+# 取得したCFなどの中間データ
 data/*.csv
