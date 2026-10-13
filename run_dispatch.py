@@ -1,8 +1,8 @@
 """日本9エリア 需給シミュレーション (経済負荷配分, 1時間刻み)
 
 例:
-    python run_dispatch.py data/project_2025_draft_2.xlsx                # 1年分
-    python run_dispatch.py data/project_2025_draft_2.xlsx --hours 168    # 1週間テスト
+    python run_dispatch.py data/project_2025_draft_2.xlsx --hours 168    # 1週間テスト(一括)
+    python run_dispatch.py data/project_2025_draft_2.xlsx --rolling      # 1年分をローリングホライズンで
     python run_dispatch.py data/project_2025_draft_2.xlsx \\
         --solar-cf data/solar_cf_ninja_2023.csv --wind-cf data/wind_cf_ninja_2023.csv
 """
@@ -20,8 +20,10 @@ def main():
     ap.add_argument("--hours", type=int, default=8760)
     ap.add_argument("--solar-cf", help="solar_cf シートを置き換えるCSV")
     ap.add_argument("--wind-cf", help="wind_cf シートを置き換えるCSV")
-    ap.add_argument("--horizon", type=int, default=744, help="ローリングホライズンの窓長[h]")
-    ap.add_argument("--overlap", type=int, default=48, help="ローリングホライズンの重なり[h]")
+    ap.add_argument("--rolling", action="store_true",
+                    help="ローリングホライズンで解く (省略時は全期間を一括で解く)")
+    ap.add_argument("--horizon", type=int, default=744, help="ローリングホライズンの窓長[h] (--rolling 時)")
+    ap.add_argument("--overlap", type=int, default=48, help="ローリングホライズンの重なり[h] (--rolling 時)")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
@@ -30,11 +32,10 @@ def main():
     n = build_network(x, hours=args.hours)
 
     opts = dict(solver_name="highs", solver_options={"threads": args.threads})
-    if args.hours <= args.horizon:
-        n.optimize(**opts)
-    else:
-        # 1年一括のLPは約1100万制約となりメモリ(16GB)を超えるため、窓分割で解く
+    if args.rolling and args.hours > args.horizon:
         n.optimize.optimize_with_rolling_horizon(horizon=args.horizon, overlap=args.overlap, **opts)
+    else:
+        n.optimize(**opts)
 
     s = summarize(n)
     pd.set_option("display.float_format", "{:,.3f}".format)
