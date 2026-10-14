@@ -98,6 +98,19 @@ python run_dispatch.py data/Network_config_2025.xlsx --rolling --uc off         
 最低出力・起動費は発電コスト検証WG（2021）等の公表値。最小運転/停止時間は公表値が見つからないための仮定。
 `--uc milp` で整数計画として厳密に解くこともできる（1年分で数時間）。
 
+### 中小のバイオマス（FIT/FIP 統計）
+
+HJKS に載らない中小のバイオマスを、エリアごとに1つの発電機「Biomass (small, <エリア>)」として出力固定で入れています。
+
+```bash
+python tools/small_biomass.py data/Network_config_2025.xlsx A_pref202512.xlsx C_kaitori202603.csv
+```
+
+- 容量: FIT/FIP 統計の表A②（都道府県別導入容量、新規＋移行認定、バイオマス比率考慮あり）をエリアに集計し、
+  モデルの大型バイオマスの容量を差し引く（2025年12月末: 全国 7.7 GW、追加 6.4 GW）
+- 発電量: 表C（買取電力量）の2025年の月別値を容量比でエリアに配分し、大型分を差し引く（追加 27.1 TWh）
+- FIP 移行分の発電量は含まない。石炭混焼のバイオマス相当分は、石炭としても数えているため二重計上になる
+
 ## ファイル構成
 
 ```
@@ -110,6 +123,7 @@ tools/fetch_ninja_cf.py Renewables.ninja から太陽光・風力CFを取得
 tools/nuclear_cf_from_hjks.py HJKS の原子力ユニット別出力から nuclear_cf シートを作成
 tools/coal_availability.py   石炭の定期点検・計画外停止から coal_cf シートを作成
 tools/thermal_uc_params.py   火力の起動停止パラメータを generators シートに設定
+tools/small_biomass.py       FIT/FIP 統計から中小のバイオマスをエリア別に追加
 data/                   入力データ（Network_config_2025.xlsx, シート構成は data/README.md）
 ```
 
