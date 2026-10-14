@@ -7,6 +7,8 @@
         --solar-cf data/solar_cf_ninja_2023.csv --wind-cf data/wind_cf_ninja_2023.csv
 """
 import argparse
+import gc
+import logging
 import time
 from pathlib import Path
 
@@ -16,6 +18,29 @@ from pypsa_japan import build_network, print_summary, read_project, summarize
 def fmt_time(sec):
     m, s = divmod(sec, 60)
     return f"{int(m)}分{s:.1f}秒" if m else f"{s:.1f}秒"
+
+
+def rolling_horizon(n, horizon, overlap, **opts):
+    """PyPSA の optimize_with_rolling_horizon と同じ手順で解く。
+
+    ウィンドウごとに前回の最適化モデルを解放する（解放しないと1ウィンドウあたり
+    約0.4 GBずつメモリが増え、1年分で8 GB環境ではメモリ不足になる）。
+    """
+    if horizon <= overlap:
+        raise ValueError("overlap は horizon より小さくしてください")
+    sns = n.snapshots
+    starts = range(0, len(sns), horizon - overlap)
+    for i, start in enumerate(starts):
+        window = sns[start:start + horizon]
+        logging.getLogger(__name__).info("ウィンドウ %d/%d: %s 〜 %s", i + 1, len(starts), window[0], window[-1])
+        if i and not n.stores.empty:
+            n.stores.e_initial = n.stores_t.e.loc[sns[start - 1]].values
+        status, condition = n.optimize(window, **opts)
+        if status != "ok":
+            logging.getLogger(__name__).warning("ウィンドウ %d の最適化に失敗: %s %s", i + 1, status, condition)
+        if hasattr(n, "_model"):
+            n._model = None
+        gc.collect()
 
 
 def main():
@@ -39,7 +64,7 @@ def main():
     t1 = time.perf_counter()
     opts = dict(solver_name="highs", solver_options={"threads": args.threads})
     if args.rolling and args.hours > args.horizon:
-        n.optimize.optimize_with_rolling_horizon(horizon=args.horizon, overlap=args.overlap, **opts)
+        rolling_horizon(n, args.horizon, args.overlap, **opts)
     else:
         n.optimize(**opts)
     t2 = time.perf_counter()

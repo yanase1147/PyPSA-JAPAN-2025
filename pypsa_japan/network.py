@@ -11,7 +11,7 @@
 import pandas as pd
 import pypsa
 
-CF_SHEETS = ["solar_cf", "wind_cf", "hydro_cf", "biomass_cf", "nuclear_cf"]  # nuclear_cf は任意
+CF_SHEETS = ["solar_cf", "wind_cf", "hydro_cf", "biomass_cf", "nuclear_cf", "coal_cf"]  # nuclear_cf, coal_cf は任意
 VOLL = 1e6  # 供給力不足 (load shedding) のペナルティ単価
 
 
