@@ -76,6 +76,28 @@ python tools/coal_availability.py data/Network_config_2025.xlsx
 - 計画外停止：石炭の計画外停止率 6.9%（広域機関 2022〜2024年度平均, 2026年1月）を期待値として全時間に反映
 - 発電所単位の行は 800 MW/基を目安に基数に分割。年平均の稼働率は約83%
 
+### 火力の起動停止（最低出力・最小運転/停止時間・起動費）
+
+火力（石炭・LNG・石油・その他）は起動停止を考慮して解きます（既定は線形化した起動停止 `--uc linear`）。
+パラメータは `generators` シートの `committable`, `p_min_pu`（運転中の最低出力）, `min_up_time`, `min_down_time`,
+`start_up_cost` 列で、次のコマンドで設定します（値と出典はスクリプト冒頭に記載）。
+
+```bash
+python tools/thermal_uc_params.py data/Network_config_2025.xlsx
+python run_dispatch.py data/Network_config_2025.xlsx --rolling --horizon 336   # 起動停止あり（2コアで約36分）
+python run_dispatch.py data/Network_config_2025.xlsx --rolling --uc off         # 起動停止なし（約3分）
+```
+
+| 電源 | 最低出力 | 最小運転/停止時間 | 起動費 |
+|---|---|---|---|
+| 石炭 500 MW以上 | 30% | 24 h / 12 h | 15,000 円/MW・回 |
+| 石炭 500 MW未満 | 50% | 24 h / 12 h | 15,000 円/MW・回 |
+| LNG | 30% | 4 h / 4 h | 5,000 円/MW・回 |
+| 石油・その他 | 30% | 4 h / 4 h | 5,000 円/MW・回 |
+
+最低出力・起動費は発電コスト検証WG（2021）等の公表値。最小運転/停止時間は公表値が見つからないための仮定。
+`--uc milp` で整数計画として厳密に解くこともできる（1年分で数時間）。
+
 ## ファイル構成
 
 ```
@@ -87,12 +109,13 @@ pypsa_japan/plots.py    結果の図示
 tools/fetch_ninja_cf.py Renewables.ninja から太陽光・風力CFを取得
 tools/nuclear_cf_from_hjks.py HJKS の原子力ユニット別出力から nuclear_cf シートを作成
 tools/coal_availability.py   石炭の定期点検・計画外停止から coal_cf シートを作成
+tools/thermal_uc_params.py   火力の起動停止パラメータを generators シートに設定
 data/                   入力データ（Network_config_2025.xlsx, シート構成は data/README.md）
 ```
 
 ## 既知の制約・仮定
 
-- 起動停止・最低出力（unit commitment）は考慮しない線形モデル
+- 火力の起動停止は線形化（運転状態を0〜1の連続値で扱う近似）。調整力（予備力）の確保は考慮しない
 - 原子力は2025年の実績出力に固定（`nuclear_cf` シート）
 - 石炭の停止は統計値に基づく想定（2025年の実際の停止時期ではない）。計画外停止は期待値として一律に反映
 - エリア内の送電制約は考慮しない

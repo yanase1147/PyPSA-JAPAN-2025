@@ -53,16 +53,23 @@ def main():
                     help="ローリングホライズンで解く (省略時は全期間を一括で解く)")
     ap.add_argument("--horizon", type=int, default=744, help="ローリングホライズンの窓長[h] (--rolling 時)")
     ap.add_argument("--overlap", type=int, default=48, help="ローリングホライズンの重なり[h] (--rolling 時)")
+    ap.add_argument("--uc", choices=["linear", "milp", "off"], default="linear",
+                    help="火力の起動停止の扱い: linear=線形化した起動停止(既定), milp=整数計画(厳密・低速), "
+                         "off=扱わない(最低出力なしの経済負荷配分)")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
 
     t0 = time.perf_counter()
     x = read_project(args.xlsx, solar_cf=args.solar_cf, wind_cf=args.wind_cf)
-    n = build_network(x, hours=args.hours)
+    n = build_network(x, hours=args.hours, unit_commitment=args.uc != "off")
 
     t1 = time.perf_counter()
     opts = dict(solver_name="highs", solver_options={"threads": args.threads})
+    if args.uc == "linear":
+        opts["linearized_unit_commitment"] = True
+    elif args.uc == "milp":
+        opts["solver_options"]["mip_rel_gap"] = 0.005
     if args.rolling and args.hours > args.horizon:
         rolling_horizon(n, args.horizon, args.overlap, **opts)
     else:

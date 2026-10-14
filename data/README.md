@@ -9,7 +9,7 @@
 |---|---|
 | `areas` | エリア名, 緯度, 経度 |
 | `carriers` | 揚水用キャリア (`PHS_<地点名>`) |
-| `generators` | 発電機（エリア, 種別, 定格, 限界費用, ランプ制約 等） |
+| `generators` | 発電機（エリア, 種別, 定格, 限界費用, ランプ制約, 起動停止パラメータ `committable`・`p_min_pu`・`min_up_time`・`min_down_time`・`start_up_cost` 等） |
 | `interconnections` | 連系線（area0, area1, 順方向/逆方向容量） |
 | `loads` | エリア需要（`demand_scale` で倍率） |
 | `stores` | 揚水上池（容量 MWh） |
