@@ -23,7 +23,8 @@ def summarize(n):
         "fuel_cost": (p * g.marginal_cost).drop(columns=g.index[g.carrier == "Load shedding"]).sum().sum(),
         "load_shedding_MWh": p.loc[:, g.carrier == "Load shedding"].sum().sum(),
         "marginal_price_mean": n.buses_t.marginal_price[areas].mean(),
-        "congestion_share": (flow.abs() >= ic.p_nom - 1e-3).mean(),
+        # 方向別の容量 (順方向 p_nom, 逆方向 -p_min_pu * p_nom) のどちらかに達した時間の割合
+        "congestion_share": ((flow >= ic.p_nom - 1e-3) | (flow <= ic.p_min_pu * ic.p_nom + 1e-3)).mean(),
     }
 
 

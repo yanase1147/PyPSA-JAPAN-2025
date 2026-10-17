@@ -2,7 +2,8 @@
 
 シートとPyPSAコンポーネントの対応:
     areas              -> Bus (エリア = 1ノード)
-    generators         -> Generator (時系列CFは *_cf シートの同名列。nuclear_cf は出力固定)
+    generators         -> Generator (時系列CFは *_cf シートの同名列。nuclear_cf は出力固定。
+                          committable の火力は起動停止・最低出力・最小運転/停止時間・起動費を扱う)
     loads + demand_mw  -> Load
     interconnections   -> Link (双方向: p_nom / p_nom_reverse)
     stores             -> Store (揚水上池。carrier名の専用バスに接続)
@@ -11,7 +12,7 @@
 import pandas as pd
 import pypsa
 
-CF_SHEETS = ["solar_cf", "wind_cf", "hydro_cf", "biomass_cf", "nuclear_cf"]  # nuclear_cf は任意
+CF_SHEETS = ["solar_cf", "wind_cf", "hydro_cf", "biomass_cf", "nuclear_cf", "coal_cf"]  # nuclear_cf, coal_cf は任意
 VOLL = 1e6  # 供給力不足 (load shedding) のペナルティ単価
 
 
@@ -29,7 +30,7 @@ def read_project(path, solar_cf=None, wind_cf=None):
     return x
 
 
-def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5):
+def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment=True):
     snaps = pd.date_range(f"{year}-01-01", periods=8760, freq="h")[:hours]
     n = pypsa.Network()
     n.set_snapshots(snaps)
@@ -55,11 +56,22 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5):
 
     # 発電機
     g = x["generators"].set_index("name")
+    # 起動停止 (committable) の火力は p_min_pu が「運転中の最低出力」になる。
+    # unit_commitment=False のときは起動停止を扱わず、最低出力も 0 にする（従来の経済負荷配分）。
+    sheet_uc = g.get("committable", pd.Series(False, index=g.index)).fillna(False).astype(bool)
+    uc = sheet_uc & unit_commitment
+    p_min = g.p_min_pu.where(~sheet_uc | uc, 0)   # 起動停止を扱わないときは火力の最低出力を外す
+    kw = {}
+    if uc.any():
+        kw = dict(committable=uc,
+                  min_up_time=g.get("min_up_time", 0).fillna(0).astype(int).where(uc, 0),
+                  min_down_time=g.get("min_down_time", 0).fillna(0).astype(int).where(uc, 0),
+                  start_up_cost=g.get("start_up_cost", 0).fillna(0).where(uc, 0))
     n.add("Generator", g.index, bus=g.area.values, carrier=g.carrier.values, p_nom=g.p_nom,
           marginal_cost=g.marginal_cost, efficiency=g.efficiency,
-          p_max_pu=g.p_max_pu, p_min_pu=g.p_min_pu,
+          p_max_pu=g.p_max_pu, p_min_pu=p_min,
           ramp_limit_up=g.ramp_limit_up.where(g.ramp_limit_up > 0),
-          ramp_limit_down=g.ramp_limit_down.where(g.ramp_limit_down > 0))
+          ramp_limit_down=g.ramp_limit_down.where(g.ramp_limit_down > 0), **kw)
     cf = pd.concat([x[k].iloc[:hours] for k in CF_SHEETS if k in x], axis=1).set_index(snaps)
     n.generators_t.p_max_pu = cf[cf.columns.intersection(g.index)]
 
