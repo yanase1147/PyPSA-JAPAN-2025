@@ -2,6 +2,7 @@
 
 シートとPyPSAコンポーネントの対応:
     areas              -> Bus (エリア = 1ノード)
+    thermal_efficiency + fuel_price -> 石炭・LNG の月別の限界費用
     generators         -> Generator (時系列CFは *_cf シートの同名列。nuclear_cf は出力固定。
                           committable の火力は起動停止・最低出力・最小運転/停止時間・起動費を扱う)
     loads + demand_mw  -> Load
@@ -88,6 +89,18 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
     if "nuclear_cf" in x:
         nu = x["nuclear_cf"].columns.intersection(g.index[g.carrier == "Nuclear"])
         n.generators_t.p_min_pu[nu] = n.generators_t.p_max_pu[nu]
+
+    # 石炭・LNG の限界費用: thermal_efficiency と fuel_price シートがあれば、月別の燃料価格と効率から計算する
+    #   限界費用 [円/MWh] = (輸入価格 + 税) [円/t] / 標準発熱量 [GJ/t] * 3.6 [GJ/MWh] / 効率
+    if "thermal_efficiency" in x and "fuel_price" in x:
+        te = x["thermal_efficiency"].set_index("name")
+        te = te.loc[te.index.intersection(g.index)]
+        fp = x["fuel_price"].set_index("fuel")
+        months = [f"m{m:02d}" for m in range(1, 13)]
+        heat_cost = fp[months].add(fp.tax_yen_per_t, axis=0).div(fp.heat_GJ_per_t, axis=0) * 3.6  # 円/MWh(燃料)
+        mc = pd.DataFrame({name: heat_cost.loc[r.fuel].values / r.efficiency for name, r in te.iterrows()},
+                          index=range(1, 13))
+        n.generators_t.marginal_cost = mc.reindex(snaps.month).set_index(snaps)
 
     # 供給力不足の検知用
     n.add("Generator", a.index + " load shedding", bus=a.index.values,

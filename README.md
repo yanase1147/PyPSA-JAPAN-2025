@@ -119,6 +119,21 @@ python tools/small_biomass.py data/Network_config_2025.xlsx A_pref202512.xlsx C_
 - 発電量: 表C（買取電力量）の2025年の月別値を容量比でエリアに配分し、大型分を差し引く（追加 27.1 TWh）
 - FIP 移行分の発電量は含まない。石炭混焼のバイオマス相当分は、石炭としても数えているため二重計上になる
 
+### 石炭・LNG の限界費用（燃料価格 ÷ 効率）
+
+石炭・LNG（製鉄所の副生ガスを含む）の限界費用は、2025年の月別の輸入価格と発電方式ごとの効率から計算します。
+
+```bash
+python tools/thermal_opex.py data/Network_config_2025.xlsx
+```
+
+- `fuel_price` シート: 標準発熱量（2023年度改訂: 一般炭 25.88、LNG 54.69 GJ/t）、石油石炭税（LNG 1,860、石炭 1,370 円/t）、
+  2025年1〜12月の通関CIF価格（円/t）
+- `thermal_efficiency` シート: 発電機ごとの方式の内訳と効率（発電端・HHV）。容量加重で石炭 40.9%、LNG 48.9%
+  （省エネ法の事業者目標 石炭 41%・LNG 48% とほぼ同水準）。方式の内訳は公開情報にもとづく推定なので、手で直してよい
+- 限界費用 = (輸入価格 + 税) / 標準発熱量 × 3.6 / 効率。年平均で石炭 6.1〜7.6、LNG 10.3〜15.1 円/kWh
+- 製鉄所の副生ガス発電（10件）は、石炭と同じ熱量単価・効率 38% とした（仮定）
+
 ## ファイル構成
 
 ```
@@ -132,6 +147,7 @@ tools/nuclear_cf_from_hjks.py HJKS の原子力ユニット別出力から nucle
 tools/coal_availability.py   石炭の定期点検・計画外停止から coal_cf シートを作成
 tools/thermal_uc_params.py   火力の起動停止パラメータを generators シートに設定
 tools/small_biomass.py       FIT/FIP 統計から中小のバイオマスをエリア別に追加
+tools/thermal_opex.py        石炭・LNG の効率と燃料価格のシートを作成（限界費用の根拠）
 data/                   入力データ（Network_config_2025.xlsx, シート構成は data/README.md）
 ```
 
