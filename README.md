@@ -12,7 +12,7 @@
 - **連系線**: 輸送モデル（双方向の容量制約）
 - **揚水**: 地点ごとに上池（Store）＋ポンプ/タービン（Link）。初期貯水率は容量の50%
 - **供給力不足**: エリアごとに高コスト（1,000,000 円/MWh）の仮想発電機で検出
-- **ソルバー**: HiGHS。1年一括ではメモリ（約16GB）を超えるため、約1か月（744時間）の窓を48時間重ねて順に解く（ローリングホライズン）。窓ごとに最適化モデルを解放し、8GB環境でも1年分を解ける
+- **ソルバー**: HiGHS。1年一括ではメモリ（約16GB）を超えるため、既定で期間を窓に区切り、48時間重ねて順に解く（ローリングホライズン）。窓は起動停止ありで2週間（336時間）、`--uc off` で約1か月（744時間）。窓ごとに最適化モデルを解放し、8GB環境でも1年分を解ける
 
 ## 使い方
 
@@ -20,7 +20,15 @@
 pip install -r requirements.txt
 
 python run_dispatch.py data/Network_config_2025.xlsx --hours 168   # 1週間で動作確認
-python run_dispatch.py data/Network_config_2025.xlsx               # 1年分（4コアで約4分）
+python run_dispatch.py data/Network_config_2025.xlsx               # 1年分・起動停止あり（2コアで約35分）
+python run_dispatch.py data/Network_config_2025.xlsx --uc off      # 1年分・起動停止なし（2コアで約3分）
+```
+
+ローリングホライズンは既定で有効です。1年分を一括で解く場合は `--no-rolling` を付けます
+（1年分は約16GB以上のメモリが必要で、単体法では数十分〜数時間かかるため、通常は使いません）。
+
+```bash
+python run_dispatch.py data/Network_config_2025.xlsx --no-rolling --hours 336   # 短い期間なら一括でも可
 ```
 
 結果は `results/dispatch.nc`（PyPSA netCDF）に保存され、電源別発電量・設備利用率・抑制量、
@@ -84,8 +92,8 @@ python tools/coal_availability.py data/Network_config_2025.xlsx
 
 ```bash
 python tools/thermal_uc_params.py data/Network_config_2025.xlsx
-python run_dispatch.py data/Network_config_2025.xlsx --rolling --horizon 336   # 起動停止あり（2コアで約36分）
-python run_dispatch.py data/Network_config_2025.xlsx --rolling --uc off         # 起動停止なし（約3分）
+python run_dispatch.py data/Network_config_2025.xlsx            # 起動停止あり（2コアで約35分）
+python run_dispatch.py data/Network_config_2025.xlsx --uc off   # 起動停止なし（約3分）
 ```
 
 | 電源 | 最低出力 | 最小運転/停止時間 | 起動費 |
