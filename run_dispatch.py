@@ -1,8 +1,10 @@
 """日本9エリア 需給シミュレーション (経済負荷配分, 1時間刻み)
 
 例:
-    python run_dispatch.py data/Network_config_2025.xlsx --hours 168    # 1週間テスト(一括)
-    python run_dispatch.py data/Network_config_2025.xlsx --rolling      # 1年分をローリングホライズンで
+    python run_dispatch.py data/Network_config_2025.xlsx --hours 168          # 1週間テスト
+    python run_dispatch.py data/Network_config_2025.xlsx                      # 1年分（起動停止あり, 2週間の窓）
+    python run_dispatch.py data/Network_config_2025.xlsx --uc off             # 1年分（起動停止なし, 1か月の窓）
+    python run_dispatch.py data/Network_config_2025.xlsx --no-rolling --uc off  # 1年一括（約16GB以上のメモリが必要）
     python run_dispatch.py data/Network_config_2025.xlsx \\
         --solar-cf data/solar_cf_ninja_2023.csv --wind-cf data/wind_cf_ninja_2023.csv
 """
@@ -49,16 +51,19 @@ def main():
     ap.add_argument("--hours", type=int, default=8760)
     ap.add_argument("--solar-cf", help="solar_cf シートを置き換えるCSV")
     ap.add_argument("--wind-cf", help="wind_cf シートを置き換えるCSV")
-    ap.add_argument("--rolling", action="store_true",
-                    help="ローリングホライズンで解く (省略時は全期間を一括で解く)")
-    ap.add_argument("--horizon", type=int, default=744, help="ローリングホライズンの窓長[h] (--rolling 時)")
-    ap.add_argument("--overlap", type=int, default=48, help="ローリングホライズンの重なり[h] (--rolling 時)")
+    ap.add_argument("--rolling", action=argparse.BooleanOptionalAction, default=True,
+                    help="ローリングホライズンで解く (既定)。--no-rolling で全期間を一括で解く (1年分は約16GB以上のメモリが必要)")
+    ap.add_argument("--horizon", type=int, default=None,
+                    help="ローリングホライズンの窓長[h]。既定は起動停止ありで336 (2週間)、--uc off で744 (約1か月)")
+    ap.add_argument("--overlap", type=int, default=48, help="ローリングホライズンの重なり[h]")
     ap.add_argument("--uc", choices=["linear", "milp", "off"], default="linear",
                     help="火力の起動停止の扱い: linear=線形化した起動停止(既定), milp=整数計画(厳密・低速), "
                          "off=扱わない(最低出力なしの経済負荷配分)")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
+    if args.horizon is None:
+        args.horizon = 744 if args.uc == "off" else 336
 
     t0 = time.perf_counter()
     x = read_project(args.xlsx, solar_cf=args.solar_cf, wind_cf=args.wind_cf)
