@@ -86,7 +86,7 @@ python tools/coal_availability.py data/Network_config_2025.xlsx
 
 ### 火力の起動停止（最低出力・最小運転/停止時間・起動費）
 
-火力（石炭・LNG・石油・その他）の起動停止は、`--uc linear`（線形化した起動停止）を付けたときに考慮します。既定（`--uc off`）では起動停止と最低出力を扱いません。
+火力（石炭・LNG・石油・その他）の起動停止は、`--uc linear`（線形化した起動停止）を付けたときに考慮します。既定（`--uc off`）では起動停止と、起動停止の最低出力（`p_min_pu`）を扱いません（LNG・石炭の最低出力は `must_run_pu` で別に入れています）。
 パラメータは `generators` シートの `committable`, `p_min_pu`（運転中の最低出力）, `min_up_time`, `min_down_time`,
 `start_up_cost` 列で、次のコマンドで設定します（値と出典はスクリプト冒頭に記載）。
 
