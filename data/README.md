@@ -33,5 +33,12 @@
   - 磯子 新1号（600 MW）: 石油 → 石炭（USC）。竹原 3号（700 MW）: 石油 → 石炭（SC）
   - 勿来（7〜9号）: 2,650 → 1,450 MW（東北経済産業局 主要電源マップと一覧の合計）
   - 修正後に tools/coal_availability.py, thermal_uc_params.py, thermal_opex.py, coal_capacity_market.py を再実行
-- 未確認: 広野（石油 1,800 MW と IGCC のみで、石炭 5・6号 1,200 MW が無い）、
-  鹿島（石炭 1,905 MW と日本製鉄鹿島 475 MW が一覧の号機と対応しない）
+- 2026-10: 広野・鹿島で、石炭と別の燃料の号機が1行にまとまっていたのを分けた
+  - 広野（石油 1,800 MW）= 2号（石油 600 MW）＋ 5・6号（石炭 USC 600 MW×2）。1・3・4号は2023年10月に廃止
+    → 「Hirono Thermal PS」石油 600 MW と「Hirono Thermal PS Units 5-6」石炭 1,200 MW に分割
+  - 鹿島（石炭 1,905 MW）= JERA 鹿島 7号系列（都市ガス GTCC 1,260 MW）＋ 鹿島パワー 2号（石炭 USC 645 MW）。
+    JERA 鹿島 1〜6号（石油）は2023年3月に廃止
+    → 「Kashima Thermal PS」LNG 1,260 MW と「Kashima Power Kashima Thermal PS Unit 2」石炭 645 MW に分割
+  - 日本製鉄 鹿島 1号: 475 → 522 MW、方式 USC → SC（2007年、東京電力への卸供給）
+  - 出典: 経産省の号機別一覧（上記）、Wikipedia「広野火力発電所」「鹿島火力発電所」「日本製鉄鹿島火力発電所」、
+    J-POWER プレスリリース（2020/7/1）

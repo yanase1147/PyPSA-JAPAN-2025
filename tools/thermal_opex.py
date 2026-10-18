@@ -120,7 +120,7 @@ PLANT = {
     "Matsuura Thermal PS": [("sc", 0.5), ("usc", 0.5)],
     "Hitachinaka Thermal PS": [("usc", 1)],
     "Soma Kyodo Power Shinchi Thermal PS": [("sc", 1)],
-    "Kashima Thermal PS": [("usc_new", 0.34), ("sc", 0.66)],
+    "Kashima Thermal PS": [("cc1500", 1)],                                  # JERA 鹿島 7号系列（都市ガス GTCC、方式は推定）
     "Maizuru PS": [("usc", 1)],
     "Matsuura PS": [("sc", 700 / 1700), ("usc_new", 1000 / 1700)],
     "Tomato-Atsuma PS": [("sub", 350 / 1650), ("sc", 600 / 1650), ("usc", 700 / 1650)],
@@ -150,7 +150,9 @@ PLANT = {
     "Shin-Onoda PS Unit 2": [("sc", 1)],
     "Takasago Thermal PS": [("sub", 1)],
     "Matsushima Thermal PS": [("sc", 1)],
-    "Nippon Steel Kashima PS": [("usc_new", 1)],
+    "Nippon Steel Kashima PS": [("sc", 1)],                                 # 日本製鉄 鹿島 1号 SC（2007年）
+    "Kashima Power Kashima Thermal PS Unit 2": [("usc_new", 1)],            # 鹿島パワー 2号 USC（2020年）
+    "Hirono Thermal PS Units 5-6": [("usc", 1)],                            # JERA 広野 5号（2004年）・6号（2013年）USC
     "Osaki PS Unit 1-1": [("pfbc", 1)],
     "Oxygen-blown IGCC Demonstration PS": [("igcc_demo", 1)],
     "Kanda PS": [("pfbc", 1)],
