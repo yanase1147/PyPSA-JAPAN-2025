@@ -134,8 +134,8 @@ def main():
     ap.add_argument("--lng-price-scale", type=float, default=1.0, help="LNG の輸入価格に掛ける倍率（感度分析用）")
     ap.add_argument("--lng-min-pu", type=float, default=0.0, help="（実験）LNG火力の最低出力[p.u.]。起動停止なしでも常に最低出力で運転させる")
     ap.add_argument("--coal-avail-scale", type=float, default=1.0, help="（実験）石炭の出力上限（利用可能率）に掛ける倍率")
-    ap.add_argument("--drop-selfgen", choices=["none", "byproduct", "all"], default="none",
-                    help="（実験）工場の自家発を外す。byproduct=製鉄所の副生ガス発電のみ, all=副生ガス+自家発の石炭")
+    ap.add_argument("--drop-selfgen", choices=["none", "all"], default="none",
+                    help="（実験）工場の自家発の石炭（SELF_GENERATION）を外す。製鉄所の副生ガス発電は入力から外してある（excluded_generators シート）")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
@@ -157,10 +157,7 @@ def main():
         import sys
         sys.path.insert(0, str(Path(__file__).parent / "tools"))
         from coal_capacity_market import SELF_GENERATION
-        te = x["thermal_efficiency"].set_index("name")
-        drop = list(te.index[te.fuel == "byproduct"])
-        if args.drop_selfgen == "all":
-            drop += [d for d in SELF_GENERATION if d in n.generators.index]
+        drop = [d for d in SELF_GENERATION if d in n.generators.index]
         n.generators.loc[drop, "p_nom"] = 0.0
         print(f"自家発として外した発電機: {len(drop)} 基")
     if args.lng_min_pu:

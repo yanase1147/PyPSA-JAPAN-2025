@@ -12,6 +12,7 @@
 | `generators` | 発電機（エリア, 種別, 定格, 限界費用, ランプ制約, 起動停止パラメータ `committable`・`p_min_pu`・`min_up_time`・`min_down_time`・`start_up_cost`、年間設備利用率の上限 `max_annual_cf`（非効率石炭の稼働抑制、`tools/coal_capacity_market.py` で設定） 等） |
 | `thermal_efficiency` | 石炭・LNG の発電機ごとの効率（発電端・HHV）と燃料。`tools/thermal_opex.py` で作成 |
 | `fuel_price` | 燃料ごとの標準発熱量・石油石炭税・月別の輸入価格（円/t）・燃料費以外の変動費 `vom_yen_per_MWh`（JEPXに合わせた較正値） |
+| `excluded_generators` | モデルから外した発電機（`generators` と同じ列。読み込まれない） |
 | `interconnections` | 連系線（area0, area1, 順方向/逆方向容量） |
 | `loads` | エリア需要（`demand_scale` で倍率） |
 | `stores` | 揚水上池（容量 MWh） |
@@ -27,6 +28,10 @@
 `run_dispatch.py --solar-cf ... --wind-cf ...` で Excel のシートと差し替えられます。
 
 ## 入力の修正履歴
+
+- 2026-10: 製鉄所の副生ガス発電（10件, 5.7 GW）を `generators` シートから外し、`excluded_generators` シートに移した
+  - 大半が構内で自家消費され、需要（電力会社が供給する分）に含まれないため。電力調査統計（事業用）の石炭・LNGにも含まれない
+  - 修正後に thermal_opex.py, thermal_uc_params.py, coal_capacity_market.py を再実行
 
 - 2026-10: 経産省 石炭火力検討WG 第1回 参考資料1（2020/8/7）の号機別一覧と照合して修正
   - 東新潟 1号（600 MW）: 石炭 → 石油（重油）。2号（600 MW）: 石炭 → LNG（重油・原油・LNGの汽力）
