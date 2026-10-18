@@ -12,7 +12,7 @@
 - **連系線**: 輸送モデル（双方向の容量制約）
 - **揚水**: 地点ごとに上池（Store）＋ポンプ/タービン（Link）。初期貯水率は容量の50%
 - **供給力不足**: エリアごとに高コスト（1,000,000 円/MWh）の仮想発電機で検出
-- **ソルバー**: HiGHS。1年一括ではメモリ（約16GB）を超えるため、既定で期間を窓に区切り、48時間重ねて順に解く（ローリングホライズン）。窓は起動停止ありで2週間（336時間）、`--uc off` で約1か月（744時間）。窓ごとに最適化モデルを解放し、8GB環境でも1年分を解ける
+- **ソルバー**: HiGHS。1年一括ではメモリ（約16GB）を超えるため、既定で期間を窓に区切り、48時間重ねて順に解く（ローリングホライズン）。窓は起動停止なし（既定）で約1か月（744時間）、起動停止あり（`--uc linear`）で2週間（336時間）。窓ごとに最適化モデルを解放し、8GB環境でも1年分を解ける
 
 ## 使い方
 
@@ -20,8 +20,8 @@
 pip install -r requirements.txt
 
 python run_dispatch.py data/Network_config_2025.xlsx --hours 168   # 1週間で動作確認
-python run_dispatch.py data/Network_config_2025.xlsx               # 1年分・起動停止あり（2コアで約35分）
-python run_dispatch.py data/Network_config_2025.xlsx --uc off      # 1年分・起動停止なし（2コアで約3分）
+python run_dispatch.py data/Network_config_2025.xlsx               # 1年分・起動停止なし（既定、2コアで約3分）
+python run_dispatch.py data/Network_config_2025.xlsx --uc linear   # 1年分・起動停止あり（2コアで約20〜35分）
 ```
 
 ローリングホライズンは既定で有効です。1年分を一括で解く場合は `--no-rolling` を付けます
@@ -86,14 +86,14 @@ python tools/coal_availability.py data/Network_config_2025.xlsx
 
 ### 火力の起動停止（最低出力・最小運転/停止時間・起動費）
 
-火力（石炭・LNG・石油・その他）は起動停止を考慮して解きます（既定は線形化した起動停止 `--uc linear`）。
+火力（石炭・LNG・石油・その他）の起動停止は、`--uc linear`（線形化した起動停止）を付けたときに考慮します。既定（`--uc off`）では起動停止と最低出力を扱いません。
 パラメータは `generators` シートの `committable`, `p_min_pu`（運転中の最低出力）, `min_up_time`, `min_down_time`,
 `start_up_cost` 列で、次のコマンドで設定します（値と出典はスクリプト冒頭に記載）。
 
 ```bash
 python tools/thermal_uc_params.py data/Network_config_2025.xlsx
-python run_dispatch.py data/Network_config_2025.xlsx            # 起動停止あり（2コアで約35分）
-python run_dispatch.py data/Network_config_2025.xlsx --uc off   # 起動停止なし（約3分）
+python run_dispatch.py data/Network_config_2025.xlsx --uc linear   # 起動停止あり（2コアで約20〜35分）
+python run_dispatch.py data/Network_config_2025.xlsx               # 起動停止なし（既定、約3分）
 ```
 
 | 電源 | 最低出力 | 最小運転/停止時間 | 起動費 |
@@ -153,7 +153,7 @@ data/                   入力データ（Network_config_2025.xlsx, シート構
 
 ## 既知の制約・仮定
 
-- 火力の起動停止は線形化（運転状態を0〜1の連続値で扱う近似）。調整力（予備力）の確保は考慮しない
+- 火力の起動停止は既定では扱わない。`--uc linear` では線形化（運転状態を0〜1の連続値で扱う近似）。調整力（予備力）の確保は考慮しない
 - 原子力は2025年の実績出力に固定（`nuclear_cf` シート）
 - 石炭の停止は統計値に基づく想定（2025年の実際の停止時期ではない）。計画外停止は期待値として一律に反映
 - エリア内の送電制約は考慮しない
