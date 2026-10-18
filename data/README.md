@@ -11,7 +11,7 @@
 | `carriers` | 揚水用キャリア (`PHS_<地点名>`) |
 | `generators` | 発電機（エリア, 種別, 定格, 限界費用, ランプ制約, 起動停止パラメータ `committable`・`p_min_pu`・`min_up_time`・`min_down_time`・`start_up_cost`、年間設備利用率の上限 `max_annual_cf`（非効率石炭の稼働抑制、`tools/coal_capacity_market.py` で設定）、LNGの最低出力 `must_run_pu`（`tools/lng_must_run.py` で設定、起動停止なしのとき有効） 等） |
 | `thermal_efficiency` | 石炭・LNG の発電機ごとの効率（発電端・HHV）と燃料。`tools/thermal_opex.py` で作成 |
-| `fuel_price` | 燃料ごとの標準発熱量・石油石炭税・月別の輸入価格（円/t）・燃料費以外の変動費 `vom_yen_per_MWh`（JEPXに合わせた較正値） |
+| `fuel_price` | 燃料ごとの標準発熱量・石油石炭税・月別の輸入価格（円/t）・燃料諸経費 `other_yen_per_t`（発電コスト検証WG）・較正用の変動費 `vom_yen_per_MWh`（既定 0） |
 | `excluded_generators` | モデルから外した発電機（`generators` と同じ列。読み込まれない） |
 | `interconnections` | 連系線（area0, area1, 順方向/逆方向容量） |
 | `loads` | エリア需要（`demand_scale` で倍率） |

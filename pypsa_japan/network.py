@@ -101,7 +101,8 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
         te = te.loc[te.index.intersection(g.index)]
         fp = x["fuel_price"].set_index("fuel")
         months = [f"m{m:02d}" for m in range(1, 13)]
-        heat_cost = fp[months].add(fp.tax_yen_per_t, axis=0).div(fp.heat_GJ_per_t, axis=0) * 3.6  # 円/MWh(燃料)
+        other = fp["other_yen_per_t"].fillna(0) if "other_yen_per_t" in fp else 0   # 燃料諸経費 [円/t]（発電コスト検証WG）
+        heat_cost = fp[months].add(fp.tax_yen_per_t + other, axis=0).div(fp.heat_GJ_per_t, axis=0) * 3.6  # 円/MWh(燃料)
         # 燃料費以外の変動費（円/MWh）: fuel_price シートの vom_yen_per_MWh 列。vom={"coal": 1500, ...} で上書きできる
         add = fp["vom_yen_per_MWh"].fillna(0).to_dict() if "vom_yen_per_MWh" in fp else {}
         add.update(vom or {})

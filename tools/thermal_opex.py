@@ -8,7 +8,8 @@
 - thermal_efficiency: 発電機ごとの方式（容量の内訳）、効率、燃料。値は手で直してよい
 - fuel_price: 燃料ごとの標準発熱量、石油石炭税、2025年の月別の輸入価格（円/t）
 build_network は両シートがあると、限界費用を月別に
-    限界費用 [円/MWh] = (輸入価格 + 税) [円/t] ÷ 標準発熱量 [GJ/t] × 3.6 [GJ/MWh] ÷ 効率 + 燃料費以外の変動費
+    限界費用 [円/MWh] = (輸入価格 + 税) [円/t] ÷ 標準発熱量 [GJ/t] × 3.6 [GJ/MWh] ÷ 効率 + 燃料費以外の変動費（較正用、既定 0）
+    ただし 輸入価格 + 税 に 燃料諸経費 [円/t] を加える
 として設定する（generators シートの marginal_cost は年平均値に書き換えて参考に残す）。
 
 出典:
@@ -159,18 +160,20 @@ PLANT = {
 }
 # 上にない石炭の行（300 MW 未満の小型・自家発系）は "sub"
 
+# 燃料諸経費 [円/t]（輸入価格に含まれない国内の費用）: 発電コスト検証WG（2021）「各電源の諸元一覧」p.12-13 の
+# 石炭 2,000 円/t、LNG 2,800 円/t。WG の運転維持費は固定費（人件費・修繕費・諸費・業務分担費）だけで、
+# 変動する運転維持費は示されていない。WG が示す変動費は、燃料費（燃料諸経費を含む）とCO2対策費。
+OTHER_YEN_PER_T = {"lng": 2800, "coal": 2000, "byproduct": 2000}
+
 FUEL = {  # 標準発熱量 [GJ/t], 石油石炭税 [円/t], 2025年1〜12月の輸入価格 [円/t]
     "lng": (54.69, 1860, [100350, 94310, 90910, 88780, 86660, 85470, 85050, 84650, 82430, 81700, 84140, 85780]),
     "coal": (25.88, 1370, [23390, 21690, 19580, 18070, 17270, 16980, 16910, 17850, 17860, 18400, 17910, 18840]),
 }
 FUEL["byproduct"] = FUEL["coal"]
 
-# 燃料費以外の変動費 [円/MWh]（価格水準の補正）。JEPX エリアプライス（2025年10〜12月）に合わせた較正値で、
-# 運転維持費の実測値ではない。燃料費だけの限界費用では、西日本の価格が石炭の限界費用で決まり、JEPX より
-# 2.4〜3.6円/kWh 低くなる。実際には、予備力の確保・最低出力・燃料制約・入札時の上乗せなどで価格が上がる分を、
-# 石炭に 3.0、LNG に 1.0 円/kWh として一括で表す（LNGの最低出力 20% を入れたうえで、10〜12月の平均絶対誤差が最小の組み合わせ）。0 にすると燃料費だけの限界費用になる。
-# run_dispatch.py の --vom-coal / --vom-lng で実行時に上書きできる。
-VOM = {"lng": 1000, "coal": 3000, "byproduct": 3000}
+# 燃料費以外の変動費 [円/MWh]（較正用。既定は 0）。以前は JEPX（2025年10〜12月）に合わせた値（石炭 3.0、LNG 1.0 円/kWh）を
+# 入れていたが、発電コスト検証WGの値（燃料諸経費）に置き換えた。run_dispatch.py の --vom-coal / --vom-lng で試算できる。
+VOM = {"lng": 0, "coal": 0, "byproduct": 0}
 
 
 def main(xlsx):
@@ -197,7 +200,7 @@ def main(xlsx):
     # marginal_cost 列を年平均の値に更新（参考値。計算は fuel_price の月別値を使う）
     for name, carrier, eff, fuel, desc, r in rows:
         gj, tax, price = FUEL[fuel]
-        mc = (sum(price) / 12 + tax) / gj * 3.6 / eff + VOM[fuel]
+        mc = (sum(price) / 12 + tax + OTHER_YEN_PER_T[fuel]) / gj * 3.6 / eff + VOM[fuel]
         ws.cell(r, hdr["marginal_cost"]).value = round(mc)
         ws.cell(r, hdr["efficiency"]).value = eff
 
@@ -210,9 +213,9 @@ def main(xlsx):
     for name, carrier, eff, fuel, desc, _ in rows:
         te.append([name, carrier, eff, fuel, desc])
     fp = wb.create_sheet("fuel_price", index=after + 1)
-    fp.append(["fuel", "heat_GJ_per_t", "tax_yen_per_t"] + [f"m{m:02d}" for m in range(1, 13)] + ["vom_yen_per_MWh"])
+    fp.append(["fuel", "heat_GJ_per_t", "tax_yen_per_t"] + [f"m{m:02d}" for m in range(1, 13)] + ["vom_yen_per_MWh", "other_yen_per_t"])
     for fuel, (gj, tax, price) in FUEL.items():
-        fp.append([fuel, gj, tax] + price + [VOM[fuel]])
+        fp.append([fuel, gj, tax] + price + [VOM[fuel], OTHER_YEN_PER_T[fuel]])
     wb.save(xlsx)
 
     # 確認用の集計
