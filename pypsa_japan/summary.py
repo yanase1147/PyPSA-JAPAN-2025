@@ -20,7 +20,8 @@ def summarize(n):
     return {
         "generation": gen,
         "demand_TWh": n.loads_t.p_set.sum().sum() / 1e6,
-        "fuel_cost": (p * g.marginal_cost).drop(columns=g.index[g.carrier == "Load shedding"]).sum().sum(),
+        "fuel_cost": (p * n.get_switchable_as_dense("Generator", "marginal_cost"))
+        .drop(columns=g.index[g.carrier == "Load shedding"]).sum().sum(),  # 月別の限界費用にも対応
         "load_shedding_MWh": p.loc[:, g.carrier == "Load shedding"].sum().sum(),
         "marginal_price_mean": n.buses_t.marginal_price[areas].mean(),
         # 方向別の容量 (順方向 p_nom, 逆方向 -p_min_pu * p_nom) のどちらかに達した時間の割合
