@@ -18,7 +18,8 @@ build_network は両シートがあると、限界費用を月別に
 - 効率（発電端・高位発熱量）: 方式ごとの目安。主な根拠は
     * 発電コスト検証WG（2021/4/12）: USC石炭 43.5%、1500℃級GTCC 54.5%（新設のモデルプラント）
     * 省エネ法 火力のベンチマーク（2018/12/3）: 新設基準 石炭 42.0%・LNG 50.5%、事業者目標 石炭 41%・LNG 48%
-  で、既設の古い設備ほど低い値とした。発電所の方式の内訳は公開情報にもとづく推定で、確認が必要。
+  で、既設の古い設備ほど低い値とした。石炭の方式（亜臨界・SC・USC・IGCC・PFBC）は経産省 石炭火力検討WG
+  第1回 参考資料1（2020/8/7）の号機別一覧に合わせた。LNG の方式の内訳は公開情報にもとづく推定。
 - 製鉄所の副生ガス（高炉ガス等）を主燃料とする発電所は、燃料を「副生ガス」とし、石炭と同じ熱量単価とした（仮定）。
 """
 import sys
@@ -42,7 +43,8 @@ CLASS = {
     "usc":        (0.42, "coal", "超々臨界（USC）"),
     "usc_new":    (0.435, "coal", "USC（2015年以降）"),
     "igcc":       (0.46, "coal", "IGCC（商用）"),
-    "pfbc":       (0.40, "coal", "PFBC・実証機"),
+    "pfbc":       (0.40, "coal", "PFBC"),
+    "igcc_demo":  (0.40, "coal", "IGCC 実証機"),
 }
 
 # 発電機（行）ごとの方式の内訳: [(方式, 容量の割合), ...]。1つなら割合 1
@@ -80,6 +82,7 @@ PLANT = {
     "Joetsu Thermal PS": [("cc1500", 1)],
     "Tohoku EPCO Higashi-Niigata Thermal PS Group 4": [("cc1500", 1)],
     "Tohoku EPCO Higashi-Niigata Thermal PS Group 3": [("cc1100", 1)],
+    "Tohoku EPCO Higashi-Niigata Thermal PS Unit 2": [("lng_steam", 1)],    # 重油・原油・LNG の汽力（入力では石炭になっていた）
     "Fukushima Natural Gas PS": [("cc1600", 1)],
     "Tohoku EPCO Shin-Sendai Thermal PS Group 3": [("cc1600", 1)],
     "Tohoku EPCO Joetsu Thermal PS Unit 1": [("cc1650", 1)],
@@ -110,9 +113,9 @@ PLANT = {
     "ZeroWatt Power Mihama PS": [("lng_small", 1)],
     "ZeroWatt Power Ichihara PS": [("lng_small", 1)],
     # ---- 石炭 ----
-    "Hekinan Thermal PS": [("sc", 2100 / 4100), ("usc", 2000 / 4100)],
-    "Kobe PS": [("usc", 1400 / 2700), ("usc_new", 1300 / 2700)],
-    "Nakoso PS": [("sub", 0.1), ("sc", 0.9)],
+    "Hekinan Thermal PS": [("sc", 1400 / 4100), ("usc", 2700 / 4100)],      # 1・2号 SC、3〜5号 USC
+    "Kobe PS": [("sc", 1400 / 2700), ("usc_new", 1300 / 2700)],             # 1・2号 SC、3・4号 USC（2022〜23年）
+    "Nakoso PS": [("sub", 250 / 1450), ("sc", 1200 / 1450)],               # 7号 亜臨界、8・9号 SC
     "J-POWER Tachibanawan Thermal PS": [("usc", 1)],
     "Matsuura Thermal PS": [("sc", 0.5), ("usc", 0.5)],
     "Hitachinaka Thermal PS": [("usc", 1)],
@@ -124,9 +127,9 @@ PLANT = {
     "Reihoku PS": [("sc", 0.5), ("usc", 0.5)],
     "Yokosuka Thermal PS": [("usc_new", 1)],
     "Hokuriku EPCO Tsuruga Thermal PS": [("sc", 500 / 1200), ("usc", 700 / 1200)],
-    "Hokuriku EPCO Nanao-Ota Thermal PS": [("sc", 500 / 1200), ("usc", 700 / 1200)],
+    "Hokuriku EPCO Nanao-Ota Thermal PS": [("usc", 1)],                     # 1・2号とも USC
     "Taketoyo Thermal PS": [("usc_new", 1)],
-    "Tohoku EPCO Haramachi Thermal PS Unit 1": [("sc", 1)],
+    "Tohoku EPCO Haramachi Thermal PS Unit 1": [("usc", 1)],
     "Tohoku EPCO Haramachi Thermal PS Unit 2": [("usc", 1)],
     "Misumi PS Unit 1": [("usc", 1)],
     "Misumi PS Unit 2": [("usc_new", 1)],
@@ -135,21 +138,21 @@ PLANT = {
     "Sakata Kyodo Thermal PS": [("sub", 1)],
     "Hitachinaka Kyodo Thermal PS": [("usc_new", 1)],
     "Tohoku EPCO Noshiro Thermal PS Unit 1": [("sc", 1)],
-    "Tohoku EPCO Noshiro Thermal PS Unit 2": [("sc", 1)],
+    "Tohoku EPCO Noshiro Thermal PS Unit 2": [("usc", 1)],
     "Tohoku EPCO Noshiro Thermal PS Unit 3": [("usc_new", 1)],
     "J-POWER Takehara Thermal PS New Unit 1": [("usc_new", 1)],
     "J-POWER Isogo Thermal PS New Unit 2": [("usc", 1)],
-    "Tohoku EPCO Higashi-Niigata Thermal PS Unit 1": [("sc", 1)],
-    "Tohoku EPCO Higashi-Niigata Thermal PS Unit 2": [("sc", 1)],
+    "Isogo Thermal PS New Unit 1": [("usc", 1)],                            # 石炭（入力では石油になっていた）
+    "Takehara Thermal PS Unit 3": [("sc", 1)],                             # 石炭（入力では石油になっていた）
     "Hirono IGCC PS": [("igcc", 1)],
     "Nakoso IGCC PS": [("igcc", 1)],
     "Shin-Onoda PS Unit 1": [("sc", 1)],
     "Shin-Onoda PS Unit 2": [("sc", 1)],
     "Takasago Thermal PS": [("sub", 1)],
-    "Matsushima Thermal PS": [("sub", 1)],
+    "Matsushima Thermal PS": [("sc", 1)],
     "Nippon Steel Kashima PS": [("usc_new", 1)],
     "Osaki PS Unit 1-1": [("pfbc", 1)],
-    "Oxygen-blown IGCC Demonstration PS": [("pfbc", 1)],
+    "Oxygen-blown IGCC Demonstration PS": [("igcc_demo", 1)],
     "Kanda PS": [("pfbc", 1)],
 }
 # 上にない石炭の行（300 MW 未満の小型・自家発系）は "sub"

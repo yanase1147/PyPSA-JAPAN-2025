@@ -13,6 +13,9 @@
       max_annual_cf = cap × f + 1.0 × (1 − f)
   とする（効率の高い部分は上限なし。点検・計画外停止は coal_cf シートで別に扱う）。
 - 製鉄所の副生ガス発電（方式 byproduct）は石炭を主燃料としないので対象外。
+- 工場の自家発（SELF_GENERATION）は対象外。発電の大半を自社の工場で使い、容量市場の落札電源ではないと
+  考えられるため、容量確保契約金額の減額がかからない。IPP（卸供給）や小売向けに売電する小型の石炭は
+  容量市場に参加していると考え、対象に含める。
 
 build_network は max_annual_cf 列があると、発電機の年間発電量の上限 e_sum_max を
 max_annual_cf × p_nom × 時間数 とする。ローリングホライズンでは、残りの上限を窓に配分して解く
@@ -28,9 +31,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 from thermal_opex import CLASS, PLANT  # noqa: E402
 
 
+# 工場の自家発（発電の大半を自社工場で消費）。経産省 石炭火力検討WG 第1回 参考資料1（2020）の事業者名で判断
+SELF_GENERATION = {
+    "Ube Industries PS",                # 宇部興産（現 UBE）宇部 5・6号
+    "Tokuyama East PS No.3",            # トクヤマ 徳山製造所東
+    "Sumitomo Osaka Cement Ako PS",     # 住友大阪セメント 赤穂工場
+    "Nyugawa Thermal PS",               # 住友共同電力 壬生川（住友グループの工場に供給）
+    "Niihama-Nishi Thermal PS",         # 住友共同電力 新居浜西
+}
+
+
 def annual_cap(name, carrier, threshold, cap):
     """行の max_annual_cf と、効率が threshold 未満の容量の割合を返す（対象外は None）。"""
-    if carrier != "Coal":
+    if carrier != "Coal" or name in SELF_GENERATION:
         return None, 0.0
     mix = PLANT.get(name, [("sub", 1)])
     if all(CLASS[k][1] != "coal" for k, _ in mix):          # 副生ガスなど

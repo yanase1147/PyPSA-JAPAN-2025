@@ -25,3 +25,13 @@
 
 `tools/fetch_ninja_cf.py` を実行すると、`solar_cf_ninja_<年>.csv` と `wind_cf_ninja_<年>.csv` がここに出力されます。
 `run_dispatch.py --solar-cf ... --wind-cf ...` で Excel のシートと差し替えられます。
+
+## 入力の修正履歴
+
+- 2026-10: 経産省 石炭火力検討WG 第1回 参考資料1（2020/8/7）の号機別一覧と照合して修正
+  - 東新潟 1号（600 MW）: 石炭 → 石油（重油）。2号（600 MW）: 石炭 → LNG（重油・原油・LNGの汽力）
+  - 磯子 新1号（600 MW）: 石油 → 石炭（USC）。竹原 3号（700 MW）: 石油 → 石炭（SC）
+  - 勿来（7〜9号）: 2,650 → 1,450 MW（東北経済産業局 主要電源マップと一覧の合計）
+  - 修正後に tools/coal_availability.py, thermal_uc_params.py, thermal_opex.py, coal_capacity_market.py を再実行
+- 未確認: 広野（石油 1,800 MW と IGCC のみで、石炭 5・6号 1,200 MW が無い）、
+  鹿島（石炭 1,905 MW と日本製鉄鹿島 475 MW が一覧の号機と対応しない）
