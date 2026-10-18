@@ -171,8 +171,8 @@ FUEL = {  # 標準発熱量 [GJ/t], 石油石炭税 [円/t], 2025年1〜12月の
 }
 FUEL["byproduct"] = FUEL["coal"]
 
-# 燃料費以外の変動費 [円/MWh]（較正用。既定は 0）。以前は JEPX（2025年10〜12月）に合わせた値（石炭 3.0、LNG 1.0 円/kWh）を
-# 入れていたが、発電コスト検証WGの値（燃料諸経費）に置き換えた。run_dispatch.py の --vom-coal / --vom-lng で試算できる。
+# 燃料費以外の変動費 [円/MWh]（感度分析用。既定は 0）。発電コストは発電コスト検証WGの値を根拠とし、
+# JEPX の価格に合わせた補正はしない。run_dispatch.py の --vom-coal / --vom-lng で試算できる。
 VOM = {"lng": 0, "coal": 0, "byproduct": 0}
 
 
