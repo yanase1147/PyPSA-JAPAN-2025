@@ -94,6 +94,13 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
         nu = x["nuclear_cf"].columns.intersection(g.index[g.carrier == "Nuclear"])
         n.generators_t.p_min_pu[nu] = n.generators_t.p_max_pu[nu]
 
+    # 最低出力の対象で時間ごとの出力上限（点検・停止）がある発電機は、出せない時間の下限を上限まで下げる
+    if "must_run_pu" in g:
+        mr = g.must_run_pu.fillna(0)
+        ts = [c for c in n.generators_t.p_max_pu.columns if mr[c] > 0 and not uc[c]]
+        if ts:
+            n.generators_t.p_min_pu[ts] = n.generators_t.p_max_pu[ts].clip(upper=mr[ts], axis=1)
+
     # 石炭・LNG の限界費用: thermal_efficiency と fuel_price シートがあれば、月別の燃料価格と効率から計算する
     #   限界費用 [円/MWh] = (輸入価格 + 税) [円/t] / 標準発熱量 [GJ/t] * 3.6 [GJ/MWh] / 効率
     if "thermal_efficiency" in x and "fuel_price" in x:
