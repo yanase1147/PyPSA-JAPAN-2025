@@ -132,6 +132,8 @@ def main():
     ap.add_argument("--vom-coal", type=float, default=None, help="石炭の燃料費以外の変動費[円/kWh]（fuel_price シートの値を上書き）")
     ap.add_argument("--vom-lng", type=float, default=None, help="LNG の燃料費以外の変動費[円/kWh]（同上）")
     ap.add_argument("--lng-price-scale", type=float, default=1.0, help="LNG の輸入価格に掛ける倍率（感度分析用）")
+    ap.add_argument("--lng-min-pu", type=float, default=0.0, help="（実験）LNG火力の最低出力[p.u.]。起動停止なしでも常に最低出力で運転させる")
+    ap.add_argument("--coal-avail-scale", type=float, default=1.0, help="（実験）石炭の出力上限（利用可能率）に掛ける倍率")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
@@ -149,6 +151,13 @@ def main():
     if args.vom_coal is not None:
         vom["byproduct"] = args.vom_coal * 1e3
     n = build_network(x, hours=args.hours, unit_commitment=args.uc != "off", annual_cap=args.annual_cap, vom=vom)
+    if args.lng_min_pu:
+        gas = n.generators.index[n.generators.carrier == "Gas"]
+        n.generators.loc[gas, "p_min_pu"] = args.lng_min_pu
+    if args.coal_avail_scale != 1.0:
+        coal = n.generators.index[n.generators.carrier == "Coal"]
+        pm = n.get_switchable_as_dense("Generator", "p_max_pu")[coal] * args.coal_avail_scale
+        n.generators_t.p_max_pu[coal] = pm
 
     t1 = time.perf_counter()
     opts = dict(solver_name="highs", solver_options={"threads": args.threads})
