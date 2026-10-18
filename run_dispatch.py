@@ -132,6 +132,8 @@ def main():
     ap.add_argument("--vom-coal", type=float, default=None, help="石炭の燃料費以外の変動費[円/kWh]（fuel_price シートの値を上書き）")
     ap.add_argument("--vom-lng", type=float, default=None, help="LNG の燃料費以外の変動費[円/kWh]（同上）")
     ap.add_argument("--lng-price-scale", type=float, default=1.0, help="LNG の輸入価格に掛ける倍率（感度分析用）")
+    ap.add_argument("--coal-min-pu", type=float, default=None,
+                    help="実験用: 石炭火力の最低出力（p_nom比）。軽負荷期の最低運転台数（下げ代の確保）の影響を見る。既定は使わない")
     ap.add_argument("--lng-min-pu", type=float, default=None,
                     help="LNG火力の最低出力[p.u.]（generators シートの must_run_pu を上書き。0で最低出力なし）")
     ap.add_argument("--coal-avail-scale", type=float, default=1.0, help="（実験）石炭の出力上限（利用可能率）に掛ける倍率")
@@ -169,6 +171,10 @@ def main():
     if args.lng_min_pu is not None:
         gas = n.generators.index[n.generators.carrier == "Gas"]
         n.generators.loc[gas, "p_min_pu"] = args.lng_min_pu
+    if args.coal_min_pu is not None:
+        coal = n.generators.index[n.generators.carrier == "Coal"]
+        pmax = n.get_switchable_as_dense("Generator", "p_max_pu")[coal]
+        n.generators_t.p_min_pu[coal] = pmax.clip(upper=args.coal_min_pu)   # 点検・停止で出せない分は下限も下げる
     if args.coal_avail_scale != 1.0:
         coal = n.generators.index[n.generators.carrier == "Coal"]
         pm = n.get_switchable_as_dense("Generator", "p_max_pu")[coal] * args.coal_avail_scale
