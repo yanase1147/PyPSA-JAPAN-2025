@@ -137,6 +137,8 @@ def main():
     ap.add_argument("--coal-avail-scale", type=float, default=1.0, help="（実験）石炭の出力上限（利用可能率）に掛ける倍率")
     ap.add_argument("--drop-selfgen", choices=["none", "all"], default="none",
                     help="（実験）工場の自家発の石炭（SELF_GENERATION）を外す。製鉄所の副生ガス発電は入力から外してある（excluded_generators シート）")
+    ap.add_argument("--solar-scale", type=float, default=1.0,
+                    help="（実験）太陽光の出力に掛ける倍率。OCCTO需要は自家消費を含まないので、系統に流れる分に合わせる用")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
@@ -161,6 +163,9 @@ def main():
         drop = [d for d in SELF_GENERATION if d in n.generators.index]
         n.generators.loc[drop, "p_nom"] = 0.0
         print(f"自家発として外した発電機: {len(drop)} 基")
+    if args.solar_scale != 1.0:
+        sol = n.generators.index[n.generators.carrier == "Solar"]
+        n.generators.loc[sol, "p_nom"] *= args.solar_scale
     if args.lng_min_pu is not None:
         gas = n.generators.index[n.generators.carrier == "Gas"]
         n.generators.loc[gas, "p_min_pu"] = args.lng_min_pu
