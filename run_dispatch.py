@@ -131,6 +131,7 @@ def main():
                          "上限の双対変数を限界費用に上乗せする(既定・高速), hard=上限を制約として入れる(窓ごとに数十倍遅い)")
     ap.add_argument("--vom-coal", type=float, default=None, help="石炭の燃料費以外の変動費[円/kWh]（fuel_price シートの値を上書き）")
     ap.add_argument("--vom-lng", type=float, default=None, help="LNG の燃料費以外の変動費[円/kWh]（同上）")
+    ap.add_argument("--lng-price-scale", type=float, default=1.0, help="LNG の輸入価格に掛ける倍率（感度分析用）")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
@@ -139,6 +140,11 @@ def main():
 
     t0 = time.perf_counter()
     x = read_project(args.xlsx, solar_cf=args.solar_cf, wind_cf=args.wind_cf)
+    if args.lng_price_scale != 1.0:
+        fp = x["fuel_price"]
+        m = [c for c in fp.columns if c.startswith("m") and c[1:].isdigit()]
+        fp[m] = fp[m].astype(float)
+        fp.loc[fp.fuel == "lng", m] *= args.lng_price_scale
     vom = {f: v * 1e3 for f, v in (("coal", args.vom_coal), ("lng", args.vom_lng)) if v is not None}
     if args.vom_coal is not None:
         vom["byproduct"] = args.vom_coal * 1e3
