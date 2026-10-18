@@ -4,7 +4,8 @@
     areas              -> Bus (エリア = 1ノード)
     thermal_efficiency + fuel_price -> 石炭・LNG の月別の限界費用
     generators         -> Generator (時系列CFは *_cf シートの同名列。nuclear_cf は出力固定。
-                          committable の火力は起動停止・最低出力・最小運転/停止時間・起動費を扱う)
+                          committable の火力は起動停止・最低出力・最小運転/停止時間・起動費を扱う。
+                          max_annual_cf 列は年間設備利用率の上限、must_run_pu 列は起動停止を扱わない火力の最低出力)
     loads + demand_mw  -> Load
     interconnections   -> Link (双方向: p_nom / p_nom_reverse)
     stores             -> Store (揚水上池。carrier名の専用バスに接続)
@@ -31,7 +32,7 @@ def read_project(path, solar_cf=None, wind_cf=None):
     return x
 
 
-def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment=True):
+def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment=True, annual_cap=True, vom=None):
     snaps = pd.date_range(f"{year}-01-01", periods=8760, freq="h")[:hours]
     n = pypsa.Network()
     n.set_snapshots(snaps)
@@ -62,6 +63,9 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
     sheet_uc = g.get("committable", pd.Series(False, index=g.index)).fillna(False).astype(bool)
     uc = sheet_uc & unit_commitment
     p_min = g.p_min_pu.where(~sheet_uc | uc, 0)   # 起動停止を扱わないときは火力の最低出力を外す
+    # 最低出力（must_run_pu, tools/lng_must_run.py）: 起動停止を扱わない発電機の下限。起動停止を扱う発電機は p_min_pu に従う
+    if "must_run_pu" in g:
+        p_min = p_min.where(uc, p_min.combine(g.must_run_pu.fillna(0), max))
     kw = {}
     if uc.any():
         kw = dict(committable=uc,
@@ -90,6 +94,13 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
         nu = x["nuclear_cf"].columns.intersection(g.index[g.carrier == "Nuclear"])
         n.generators_t.p_min_pu[nu] = n.generators_t.p_max_pu[nu]
 
+    # 最低出力の対象で時間ごとの出力上限（点検・停止）がある発電機は、出せない時間の下限を上限まで下げる
+    if "must_run_pu" in g:
+        mr = g.must_run_pu.fillna(0)
+        ts = [c for c in n.generators_t.p_max_pu.columns if mr[c] > 0 and not uc[c]]
+        if ts:
+            n.generators_t.p_min_pu[ts] = n.generators_t.p_max_pu[ts].clip(upper=mr[ts], axis=1)
+
     # 石炭・LNG の限界費用: thermal_efficiency と fuel_price シートがあれば、月別の燃料価格と効率から計算する
     #   限界費用 [円/MWh] = (輸入価格 + 税) [円/t] / 標準発熱量 [GJ/t] * 3.6 [GJ/MWh] / 効率
     if "thermal_efficiency" in x and "fuel_price" in x:
@@ -97,10 +108,22 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
         te = te.loc[te.index.intersection(g.index)]
         fp = x["fuel_price"].set_index("fuel")
         months = [f"m{m:02d}" for m in range(1, 13)]
-        heat_cost = fp[months].add(fp.tax_yen_per_t, axis=0).div(fp.heat_GJ_per_t, axis=0) * 3.6  # 円/MWh(燃料)
-        mc = pd.DataFrame({name: heat_cost.loc[r.fuel].values / r.efficiency for name, r in te.iterrows()},
-                          index=range(1, 13))
+        other = fp["other_yen_per_t"].fillna(0) if "other_yen_per_t" in fp else 0   # 燃料諸経費 [円/t]（発電コスト検証WG）
+        heat_cost = fp[months].add(fp.tax_yen_per_t + other, axis=0).div(fp.heat_GJ_per_t, axis=0) * 3.6  # 円/MWh(燃料)
+        # 燃料費以外の変動費（円/MWh）: fuel_price シートの vom_yen_per_MWh 列。vom={"coal": 1500, ...} で上書きできる
+        add = fp["vom_yen_per_MWh"].fillna(0).to_dict() if "vom_yen_per_MWh" in fp else {}
+        add.update(vom or {})
+        # 所内率（発電コスト検証WG）: 送電端効率 = 発電端効率 ×（1−所内率）で燃料費を計算する
+        own = fp["own_use_rate"].fillna(0).to_dict() if "own_use_rate" in fp else {}
+        mc = pd.DataFrame({name: heat_cost.loc[r.fuel].values / (r.efficiency * (1 - own.get(r.fuel, 0))) + add.get(r.fuel, 0)
+                           for name, r in te.iterrows()}, index=range(1, 13))
         n.generators_t.marginal_cost = mc.reindex(snaps.month).set_index(snaps)
+
+    # 年間の発電量の上限: generators シートの max_annual_cf 列（非効率石炭の稼働抑制, tools/coal_capacity_market.py）
+    #   e_sum_max = max_annual_cf × p_nom × 時間数。ローリングホライズンでは run_dispatch.py が窓ごとに配分し直す
+    if annual_cap and "max_annual_cf" in g:
+        cap = g.max_annual_cf.dropna()
+        n.generators.loc[cap.index, "e_sum_max"] = cap * g.p_nom[cap.index] * len(snaps)
 
     # 供給力不足の検知用
     n.add("Generator", a.index + " load shedding", bus=a.index.values,
