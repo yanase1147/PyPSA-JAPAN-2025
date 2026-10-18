@@ -32,7 +32,7 @@ def read_project(path, solar_cf=None, wind_cf=None):
     return x
 
 
-def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment=True, annual_cap=True):
+def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment=True, annual_cap=True, vom=None):
     snaps = pd.date_range(f"{year}-01-01", periods=8760, freq="h")[:hours]
     n = pypsa.Network()
     n.set_snapshots(snaps)
@@ -99,8 +99,11 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
         fp = x["fuel_price"].set_index("fuel")
         months = [f"m{m:02d}" for m in range(1, 13)]
         heat_cost = fp[months].add(fp.tax_yen_per_t, axis=0).div(fp.heat_GJ_per_t, axis=0) * 3.6  # 円/MWh(燃料)
-        mc = pd.DataFrame({name: heat_cost.loc[r.fuel].values / r.efficiency for name, r in te.iterrows()},
-                          index=range(1, 13))
+        # 燃料費以外の変動費（円/MWh）: fuel_price シートの vom_yen_per_MWh 列。vom={"coal": 1500, ...} で上書きできる
+        add = fp["vom_yen_per_MWh"].fillna(0).to_dict() if "vom_yen_per_MWh" in fp else {}
+        add.update(vom or {})
+        mc = pd.DataFrame({name: heat_cost.loc[r.fuel].values / r.efficiency + add.get(r.fuel, 0)
+                           for name, r in te.iterrows()}, index=range(1, 13))
         n.generators_t.marginal_cost = mc.reindex(snaps.month).set_index(snaps)
 
     # 年間の発電量の上限: generators シートの max_annual_cf 列（非効率石炭の稼働抑制, tools/coal_capacity_market.py）

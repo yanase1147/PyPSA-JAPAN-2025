@@ -129,6 +129,8 @@ def main():
     ap.add_argument("--cap-method", choices=["adder", "hard"], default="adder",
                     help="起動停止ありのローリングホライズンでの年間上限の扱い: adder=先に起動停止なし(LP)で解き、"
                          "上限の双対変数を限界費用に上乗せする(既定・高速), hard=上限を制約として入れる(窓ごとに数十倍遅い)")
+    ap.add_argument("--vom-coal", type=float, default=None, help="石炭の燃料費以外の変動費[円/kWh]（fuel_price シートの値を上書き）")
+    ap.add_argument("--vom-lng", type=float, default=None, help="LNG の燃料費以外の変動費[円/kWh]（同上）")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
@@ -137,7 +139,10 @@ def main():
 
     t0 = time.perf_counter()
     x = read_project(args.xlsx, solar_cf=args.solar_cf, wind_cf=args.wind_cf)
-    n = build_network(x, hours=args.hours, unit_commitment=args.uc != "off", annual_cap=args.annual_cap)
+    vom = {f: v * 1e3 for f, v in (("coal", args.vom_coal), ("lng", args.vom_lng)) if v is not None}
+    if args.vom_coal is not None:
+        vom["byproduct"] = args.vom_coal * 1e3
+    n = build_network(x, hours=args.hours, unit_commitment=args.uc != "off", annual_cap=args.annual_cap, vom=vom)
 
     t1 = time.perf_counter()
     opts = dict(solver_name="highs", solver_options={"threads": args.threads})
@@ -153,7 +158,7 @@ def main():
         # 1) 起動停止なし(LP)・上限ありで解き、上限の双対変数（上限の機会費用）を窓ごとに求める
         # 2) その値を限界費用に上乗せし、上限の制約は外して起動停止ありで解く
         logging.getLogger(__name__).info("年間上限の機会費用を起動停止なし(LP)で計算")
-        lp = build_network(x, hours=args.hours, unit_commitment=False, annual_cap=True)
+        lp = build_network(x, hours=args.hours, unit_commitment=False, annual_cap=True, vom=vom)
         lp_opts = dict(solver_name="highs", solver_options={"threads": args.threads})
         adder = rolling_horizon(lp, 744, args.overlap, collect_cap_duals=True, **lp_opts)
         del lp

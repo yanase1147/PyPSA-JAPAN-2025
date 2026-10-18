@@ -8,7 +8,7 @@
 - thermal_efficiency: 発電機ごとの方式（容量の内訳）、効率、燃料。値は手で直してよい
 - fuel_price: 燃料ごとの標準発熱量、石油石炭税、2025年の月別の輸入価格（円/t）
 build_network は両シートがあると、限界費用を月別に
-    限界費用 [円/MWh] = (輸入価格 + 税) [円/t] ÷ 標準発熱量 [GJ/t] × 3.6 [GJ/MWh] ÷ 効率
+    限界費用 [円/MWh] = (輸入価格 + 税) [円/t] ÷ 標準発熱量 [GJ/t] × 3.6 [GJ/MWh] ÷ 効率 + 燃料費以外の変動費
 として設定する（generators シートの marginal_cost は年平均値に書き換えて参考に残す）。
 
 出典:
@@ -165,6 +165,13 @@ FUEL = {  # 標準発熱量 [GJ/t], 石油石炭税 [円/t], 2025年1〜12月の
 }
 FUEL["byproduct"] = FUEL["coal"]
 
+# 燃料費以外の変動費 [円/MWh]（価格水準の補正）。JEPX エリアプライス（2025年10〜12月）に合わせた較正値で、
+# 運転維持費の実測値ではない。燃料費だけの限界費用では、西日本の価格が石炭の限界費用で決まり、JEPX より
+# 2.4〜3.6円/kWh 低くなる。実際には、予備力の確保・最低出力・燃料制約・入札時の上乗せなどで価格が上がる分を、
+# 石炭に 3.0、LNG に 0.5 円/kWh として一括で表す。0 にすると燃料費だけの限界費用になる。
+# run_dispatch.py の --vom-coal / --vom-lng で実行時に上書きできる。
+VOM = {"lng": 500, "coal": 3000, "byproduct": 3000}
+
 
 def main(xlsx):
     wb = openpyxl.load_workbook(xlsx)
@@ -190,7 +197,7 @@ def main(xlsx):
     # marginal_cost 列を年平均の値に更新（参考値。計算は fuel_price の月別値を使う）
     for name, carrier, eff, fuel, desc, r in rows:
         gj, tax, price = FUEL[fuel]
-        mc = (sum(price) / 12 + tax) / gj * 3.6 / eff
+        mc = (sum(price) / 12 + tax) / gj * 3.6 / eff + VOM[fuel]
         ws.cell(r, hdr["marginal_cost"]).value = round(mc)
         ws.cell(r, hdr["efficiency"]).value = eff
 
@@ -203,9 +210,9 @@ def main(xlsx):
     for name, carrier, eff, fuel, desc, _ in rows:
         te.append([name, carrier, eff, fuel, desc])
     fp = wb.create_sheet("fuel_price", index=after + 1)
-    fp.append(["fuel", "heat_GJ_per_t", "tax_yen_per_t"] + [f"m{m:02d}" for m in range(1, 13)])
+    fp.append(["fuel", "heat_GJ_per_t", "tax_yen_per_t"] + [f"m{m:02d}" for m in range(1, 13)] + ["vom_yen_per_MWh"])
     for fuel, (gj, tax, price) in FUEL.items():
-        fp.append([fuel, gj, tax] + price)
+        fp.append([fuel, gj, tax] + price + [VOM[fuel]])
     wb.save(xlsx)
 
     # 確認用の集計
