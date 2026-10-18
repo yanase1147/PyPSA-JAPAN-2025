@@ -134,6 +134,25 @@ python tools/thermal_opex.py data/Network_config_2025.xlsx
 - 限界費用 = (輸入価格 + 税) / 標準発熱量 × 3.6 / 効率。年平均で石炭 6.1〜7.6、LNG 10.3〜15.1 円/kWh
 - 製鉄所の副生ガス発電（10件）は、石炭と同じ熱量単価・効率 38% とした（仮定）
 
+### 非効率石炭の稼働抑制（容量市場の設備利用率50%）
+
+設計効率42%未満の石炭火力は、年間の設備利用率を50%以下に抑えて運転するとして、年間の発電量に上限を設けます。
+
+```bash
+python tools/coal_capacity_market.py data/Network_config_2025.xlsx
+python run_dispatch.py data/Network_config_2025.xlsx                   # 上限あり（既定）
+python run_dispatch.py data/Network_config_2025.xlsx --no-annual-cap   # 上限なし
+```
+
+- 根拠: 容量市場では、設計効率42%未満の石炭は設備利用率50%超で容量確保契約金額が20%減額（実需給2025年度〜、
+  [広域機関 検討会 2021](https://www.occto.or.jp/iinkai/youryou/kentoukai/2021/files/youryou_kentoukai_35_03_2.pdf)）。
+  実需給2027年度からは「設備利用率50%以下」がリクワイアメント（[広域機関 2023](https://www.occto.or.jp/market-board/market/oshirase/2023/files/230720_sekitankouritsu.pdf)）
+- 発電機ごとの方式の内訳（`tools/thermal_opex.py` の `PLANT`）から、効率42%未満の容量の割合 f を求め、
+  `generators` シートの `max_annual_cf` = 0.5 × f + 1.0 × (1 − f) とする。対象は石炭46行（効率42%未満の容量 23.2 GW）。
+  副生ガス発電は対象外
+- 1年一括では PyPSA の `e_sum_max`（年間発電量の上限）。ローリングホライズンでは、残りの上限を残りの期間の
+  正味需要（需要 − 太陽光・風力 − 原子力・バイオマス）の比で窓に配分し、使い残した分は後の窓に回す
+
 ## ファイル構成
 
 ```
@@ -148,6 +167,7 @@ tools/coal_availability.py   石炭の定期点検・計画外停止から coal_
 tools/thermal_uc_params.py   火力の起動停止パラメータを generators シートに設定
 tools/small_biomass.py       FIT/FIP 統計から中小のバイオマスをエリア別に追加
 tools/thermal_opex.py        石炭・LNG の効率と燃料価格のシートを作成（限界費用の根拠）
+tools/coal_capacity_market.py 非効率石炭の年間設備利用率の上限（max_annual_cf）を設定
 data/                   入力データ（Network_config_2025.xlsx, シート構成は data/README.md）
 ```
 
@@ -158,4 +178,5 @@ data/                   入力データ（Network_config_2025.xlsx, シート構
 - 石炭の停止は統計値に基づく想定（2025年の実際の停止時期ではない）。計画外停止は期待値として一律に反映
 - エリア内の送電制約は考慮しない
 - 揚水の初期貯水率50%（各窓の終端は自由）
+- 非効率石炭の稼働抑制は、減額（経済的なペナルティ）ではなく年間の上限として扱う。対象の判定は推定した方式の内訳による
 - バイオマスのうち `biomass_cf` にプロファイルの無いユニットは、7基の容量加重平均プロファイルで固定

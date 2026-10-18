@@ -4,7 +4,8 @@
     areas              -> Bus (エリア = 1ノード)
     thermal_efficiency + fuel_price -> 石炭・LNG の月別の限界費用
     generators         -> Generator (時系列CFは *_cf シートの同名列。nuclear_cf は出力固定。
-                          committable の火力は起動停止・最低出力・最小運転/停止時間・起動費を扱う)
+                          committable の火力は起動停止・最低出力・最小運転/停止時間・起動費を扱う。
+                          max_annual_cf 列は年間設備利用率の上限)
     loads + demand_mw  -> Load
     interconnections   -> Link (双方向: p_nom / p_nom_reverse)
     stores             -> Store (揚水上池。carrier名の専用バスに接続)
@@ -31,7 +32,7 @@ def read_project(path, solar_cf=None, wind_cf=None):
     return x
 
 
-def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment=True):
+def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment=True, annual_cap=True):
     snaps = pd.date_range(f"{year}-01-01", periods=8760, freq="h")[:hours]
     n = pypsa.Network()
     n.set_snapshots(snaps)
@@ -101,6 +102,12 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
         mc = pd.DataFrame({name: heat_cost.loc[r.fuel].values / r.efficiency for name, r in te.iterrows()},
                           index=range(1, 13))
         n.generators_t.marginal_cost = mc.reindex(snaps.month).set_index(snaps)
+
+    # 年間の発電量の上限: generators シートの max_annual_cf 列（非効率石炭の稼働抑制, tools/coal_capacity_market.py）
+    #   e_sum_max = max_annual_cf × p_nom × 時間数。ローリングホライズンでは run_dispatch.py が窓ごとに配分し直す
+    if annual_cap and "max_annual_cf" in g:
+        cap = g.max_annual_cf.dropna()
+        n.generators.loc[cap.index, "e_sum_max"] = cap * g.p_nom[cap.index] * len(snaps)
 
     # 供給力不足の検知用
     n.add("Generator", a.index + " load shedding", bus=a.index.values,

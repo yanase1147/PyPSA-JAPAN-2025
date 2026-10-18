@@ -14,6 +14,8 @@ import logging
 import time
 from pathlib import Path
 
+import numpy as np
+
 from pypsa_japan import build_network, print_summary, read_project, summarize
 
 
@@ -22,27 +24,74 @@ def fmt_time(sec):
     return f"{int(m)}分{s:.1f}秒" if m else f"{s:.1f}秒"
 
 
+def net_load(n):
+    """年間上限を窓に配分するときの重み: 需要 − 太陽光・風力の発電可能量 − 原子力・バイオマスの固定出力 [MW]。
+    火力が多く必要な時期ほど、上限の多くを配分する。"""
+    g = n.generators
+    pmax = n.get_switchable_as_dense("Generator", "p_max_pu")
+    pmin = n.get_switchable_as_dense("Generator", "p_min_pu")
+    vre = g.index[g.carrier.isin(["Solar", "Wind"])]
+    must = g.index[g.carrier.isin(["Nuclear", "Biomass"])]
+    nl = (n.loads_t.p_set.sum(axis=1) - (pmax[vre] * g.p_nom[vre]).sum(axis=1)
+          - (pmin[must] * g.p_nom[must]).sum(axis=1))
+    return nl.clip(lower=0.1 * nl.mean())
+
+
 def rolling_horizon(n, horizon, overlap, **opts):
     """PyPSA の optimize_with_rolling_horizon と同じ手順で解く。
 
     ウィンドウごとに前回の最適化モデルを解放する（解放しないと1ウィンドウあたり
     約0.4 GBずつメモリが増え、1年分で8 GB環境ではメモリ不足になる）。
+
+    年間の発電量の上限（e_sum_max, 非効率石炭の稼働抑制）がある発電機は、残りの上限を
+    残りの期間の正味需要（net_load）の比で窓に配分する。窓の結果のうち確定した時間の発電量を
+    使った分として差し引くので、点検などで使い残した分は後の窓に回る。
     """
     if horizon <= overlap:
         raise ValueError("overlap は horizon より小さくしてください")
+    log = logging.getLogger(__name__)
     sns = n.snapshots
-    starts = range(0, len(sns), horizon - overlap)
+    step = horizon - overlap
+    starts = range(0, len(sns), step)
+    capped = n.generators.index[np.isfinite(n.generators.e_sum_max)]
+    if len(capped):
+        budget = n.generators.e_sum_max[capped].copy()
+        used = budget * 0
+        w = net_load(n)
     for i, start in enumerate(starts):
         window = sns[start:start + horizon]
-        logging.getLogger(__name__).info("ウィンドウ %d/%d: %s 〜 %s", i + 1, len(starts), window[0], window[-1])
+        log.info("ウィンドウ %d/%d: %s 〜 %s", i + 1, len(starts), window[0], window[-1])
         if i and not n.stores.empty:
             n.stores.e_initial = n.stores_t.e.loc[sns[start - 1]].values
+        if len(capped):
+            share = w.loc[window].sum() / w.iloc[start:].sum()
+            n.generators.loc[capped, "e_sum_max"] = (budget - used).clip(lower=0) * share
         status, condition = n.optimize(window, **opts)
         if status != "ok":
-            logging.getLogger(__name__).warning("ウィンドウ %d の最適化に失敗: %s %s", i + 1, status, condition)
+            log.warning("ウィンドウ %d の最適化に失敗: %s %s", i + 1, status, condition)
+        if len(capped):
+            used += n.generators_t.p.loc[sns[start:start + step], capped].sum()
         if hasattr(n, "_model"):
             n._model = None
         gc.collect()
+    if len(capped):
+        n.generators.loc[capped, "e_sum_max"] = budget
+
+
+def print_annual_cap(n):
+    """年間設備利用率の上限がある発電機の結果を表示する。"""
+    g = n.generators
+    capped = g.index[np.isfinite(g.e_sum_max)]
+    if capped.empty:
+        return
+    hours = len(n.snapshots)
+    e = n.generators_t.p[capped].sum()
+    cf = e / (g.p_nom[capped] * hours)
+    limit = g.e_sum_max[capped] / (g.p_nom[capped] * hours)
+    print(f"\n年間設備利用率の上限（非効率石炭の稼働抑制）: {len(capped)} 基, {g.p_nom[capped].sum()/1e3:.1f} GW")
+    print(f"  発電量 {e.sum()/1e6:.1f} TWh, 容量加重の設備利用率 {e.sum()/(g.p_nom[capped].sum()*hours):.1%}"
+          f"（上限 {g.e_sum_max[capped].sum()/(g.p_nom[capped].sum()*hours):.1%}）,"
+          f" 上限に達した発電機 {(cf >= limit - 1e-3).sum()} 基")
 
 
 def main():
@@ -59,6 +108,9 @@ def main():
     ap.add_argument("--uc", choices=["linear", "milp", "off"], default="linear",
                     help="火力の起動停止の扱い: linear=線形化した起動停止(既定), milp=整数計画(厳密・低速), "
                          "off=扱わない(最低出力なしの経済負荷配分)")
+    ap.add_argument("--annual-cap", action=argparse.BooleanOptionalAction, default=True,
+                    help="generators シートの max_annual_cf（非効率石炭の年間設備利用率の上限）を使う (既定)。"
+                         "--no-annual-cap で外す")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("-o", "--out", default="results/dispatch.nc")
     args = ap.parse_args()
@@ -67,7 +119,7 @@ def main():
 
     t0 = time.perf_counter()
     x = read_project(args.xlsx, solar_cf=args.solar_cf, wind_cf=args.wind_cf)
-    n = build_network(x, hours=args.hours, unit_commitment=args.uc != "off")
+    n = build_network(x, hours=args.hours, unit_commitment=args.uc != "off", annual_cap=args.annual_cap)
 
     t1 = time.perf_counter()
     opts = dict(solver_name="highs", solver_options={"threads": args.threads})
@@ -82,6 +134,7 @@ def main():
     t2 = time.perf_counter()
 
     print_summary(summarize(n))
+    print_annual_cap(n)
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     n.export_to_netcdf(args.out)
