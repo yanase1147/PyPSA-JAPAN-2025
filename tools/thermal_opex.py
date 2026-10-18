@@ -165,6 +165,10 @@ PLANT = {
 # 変動する運転維持費は示されていない。WG が示す変動費は、燃料費（燃料諸経費を含む）とCO2対策費。
 OTHER_YEN_PER_T = {"lng": 2800, "coal": 2000, "byproduct": 2000}
 
+# 所内率（発電端→送電端）: 発電コスト検証WG（2021）p.12-13 の石炭 5.5%、LNG 2.3%。
+# モデルの限界費用の効率は「発電端効率 ×（1−所内率）」＝送電端効率とする（WG の燃料費と同じ基準）。
+OWN_USE = {"lng": 0.023, "coal": 0.055, "byproduct": 0.055}
+
 FUEL = {  # 標準発熱量 [GJ/t], 石油石炭税 [円/t], 2025年1〜12月の輸入価格 [円/t]
     "lng": (54.69, 1860, [100350, 94310, 90910, 88780, 86660, 85470, 85050, 84650, 82430, 81700, 84140, 85780]),
     "coal": (25.88, 1370, [23390, 21690, 19580, 18070, 17270, 16980, 16910, 17850, 17860, 18400, 17910, 18840]),
@@ -200,7 +204,7 @@ def main(xlsx):
     # marginal_cost 列を年平均の値に更新（参考値。計算は fuel_price の月別値を使う）
     for name, carrier, eff, fuel, desc, r in rows:
         gj, tax, price = FUEL[fuel]
-        mc = (sum(price) / 12 + tax + OTHER_YEN_PER_T[fuel]) / gj * 3.6 / eff + VOM[fuel]
+        mc = (sum(price) / 12 + tax + OTHER_YEN_PER_T[fuel]) / gj * 3.6 / (eff * (1 - OWN_USE[fuel])) + VOM[fuel]
         ws.cell(r, hdr["marginal_cost"]).value = round(mc)
         ws.cell(r, hdr["efficiency"]).value = eff
 
@@ -213,9 +217,9 @@ def main(xlsx):
     for name, carrier, eff, fuel, desc, _ in rows:
         te.append([name, carrier, eff, fuel, desc])
     fp = wb.create_sheet("fuel_price", index=after + 1)
-    fp.append(["fuel", "heat_GJ_per_t", "tax_yen_per_t"] + [f"m{m:02d}" for m in range(1, 13)] + ["vom_yen_per_MWh", "other_yen_per_t"])
+    fp.append(["fuel", "heat_GJ_per_t", "tax_yen_per_t"] + [f"m{m:02d}" for m in range(1, 13)] + ["vom_yen_per_MWh", "other_yen_per_t", "own_use_rate"])
     for fuel, (gj, tax, price) in FUEL.items():
-        fp.append([fuel, gj, tax] + price + [VOM[fuel], OTHER_YEN_PER_T[fuel]])
+        fp.append([fuel, gj, tax] + price + [VOM[fuel], OTHER_YEN_PER_T[fuel], OWN_USE[fuel]])
     wb.save(xlsx)
 
     # 確認用の集計

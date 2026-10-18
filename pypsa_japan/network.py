@@ -106,7 +106,9 @@ def build_network(x, hours=8760, year=2025, phs_initial_soc=0.5, unit_commitment
         # 燃料費以外の変動費（円/MWh）: fuel_price シートの vom_yen_per_MWh 列。vom={"coal": 1500, ...} で上書きできる
         add = fp["vom_yen_per_MWh"].fillna(0).to_dict() if "vom_yen_per_MWh" in fp else {}
         add.update(vom or {})
-        mc = pd.DataFrame({name: heat_cost.loc[r.fuel].values / r.efficiency + add.get(r.fuel, 0)
+        # 所内率（発電コスト検証WG）: 送電端効率 = 発電端効率 ×（1−所内率）で燃料費を計算する
+        own = fp["own_use_rate"].fillna(0).to_dict() if "own_use_rate" in fp else {}
+        mc = pd.DataFrame({name: heat_cost.loc[r.fuel].values / (r.efficiency * (1 - own.get(r.fuel, 0))) + add.get(r.fuel, 0)
                            for name, r in te.iterrows()}, index=range(1, 13))
         n.generators_t.marginal_cost = mc.reindex(snaps.month).set_index(snaps)
 
