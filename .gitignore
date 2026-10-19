@@ -7,3 +7,4 @@ results/
 *.log
 # 取得したCFなどの中間データ
 data/*.csv
+!data/actual_2025_calendar.csv
