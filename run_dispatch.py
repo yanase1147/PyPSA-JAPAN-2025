@@ -137,6 +137,7 @@ def main():
     ap.add_argument("--lng-min-pu", type=float, default=None,
                     help="LNG火力の最低出力[p.u.]（generators シートの must_run_pu を上書き。0で最低出力なし）")
     ap.add_argument("--coal-avail-scale", type=float, default=1.0, help="（実験）石炭の出力上限（利用可能率）に掛ける倍率")
+    ap.add_argument("--coal-avail-csv", help="（実験）石炭の出力上限をエリア×月の可用率CSV（列: bus,m,avail）で置き換える")
     ap.add_argument("--drop-selfgen", choices=["none", "all"], default="none",
                     help="（実験）工場の自家発の石炭（SELF_GENERATION）を外す。製鉄所の副生ガス発電は入力から外してある（excluded_generators シート）")
     ap.add_argument("--solar-scale", type=float, default=1.0,
@@ -179,6 +180,16 @@ def main():
         coal = n.generators.index[n.generators.carrier == "Coal"]
         pm = n.get_switchable_as_dense("Generator", "p_max_pu")[coal] * args.coal_avail_scale
         n.generators_t.p_max_pu[coal] = pm
+
+    if args.coal_avail_csv:
+        import pandas as pd
+        av = pd.read_csv(args.coal_avail_csv).set_index(["bus", "m"])["avail"]
+        coal = n.generators.index[n.generators.carrier == "Coal"]
+        snap = n.snapshots
+        pm = pd.DataFrame({c: [av[(n.generators.at[c, "bus"], m)] for m in snap.month] for c in coal}, index=snap)
+        pmin = n.get_switchable_as_dense("Generator", "p_min_pu")[coal]
+        n.generators_t.p_max_pu[coal] = pm
+        n.generators_t.p_min_pu[coal] = pmin.clip(upper=pm)   # 上限が下限を下回る期間は下限も下げる
 
     t1 = time.perf_counter()
     opts = dict(solver_name="highs", solver_options={"threads": args.threads})
